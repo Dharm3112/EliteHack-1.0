@@ -1,21 +1,82 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-primary-50: #eef2ff;
+  --color-primary-100: #e0e7ff;
+  --color-primary-500: #6366f1;
+  --color-primary-600: #4f46e5;
+  --color-primary-900: #312e81;
+
+  --color-secondary: #1E3A8A;
+  --color-secondary-hover: #1e40af;
+  --color-secondary-light: #3b82f6;
+
+  --color-dark-bg: #0f172a;
+  --color-dark-surface: #1e293b;
+  --color-dark-border: #334155;
+
+  --animate-blob: blob 7s infinite;
+
+  @keyframes blob {
+    0% {
+      transform: translate(0px, 0px) scale(1);
+    }
+
+    33% {
+      transform: translate(30px, -50px) scale(1.1);
+    }
+
+    66% {
+      transform: translate(-20px, 20px) scale(0.9);
+    }
+
+    100% {
+      transform: translate(0px, 0px) scale(1);
+    }
+  }
+}
 
 @layer base {
   body {
-    @apply bg-dark-bg text-slate-200 antialiased min-h-screen selection:bg-secondary-light selection:text-white;
+    background-color: var(--color-dark-bg);
+    color: #e2e8f0;
+    /* slate-200 */
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+  }
+
+  ::selection {
+    background-color: var(--color-secondary-light);
+    color: white;
   }
 }
 
 @layer utilities {
   .glass-panel {
-    @apply bg-dark-surface/80 backdrop-blur-md border border-dark-border shadow-xl;
+    background-color: rgba(30, 41, 59, 0.8);
+    /* dark-surface / 80 */
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--color-dark-border);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   }
-  
-  .glass-panel-hover {
-    @apply hover:bg-dark-surface hover:border-secondary-light/50 transition-all duration-300;
+
+  .glass-panel-hover:hover {
+    background-color: var(--color-dark-surface);
+    border-color: rgba(59, 130, 246, 0.5);
+    /* secondary-light / 50 */
+    transition-property: all;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 300ms;
+  }
+
+  .animation-delay-2000 {
+    animation-delay: 2s;
+  }
+
+  .animation-delay-4000 {
+    animation-delay: 4s;
   }
 }
 
@@ -26,14 +87,14 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #0f172a; 
+  background: #0f172a;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #334155; 
+  background: #334155;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569; 
+  background: #475569;
 }
