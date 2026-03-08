@@ -175,13 +175,9 @@ EliteHack-1.0/
 │
 ├── Dataset/                    # Raw training images + segmentation masks
 ├── notebooks/                  # Jupyter exploration notebooks
-│
 ├── test.py                     # ⚡ One-command evaluation script (for judges)
 ├── requirements.txt            # Python dependencies
 ├── docker-compose.yml          # Multi-service container orchestration
-├── WORKFLOW.md                 # Detailed 7-phase development workflow
-├── TODO.md                     # Project roadmap & completion tracking
-├── ProbsSol.md                 # Problem statement & strategy analysis
 └── README.md                   # ← You are here
 ```
 
