@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white" />
 </p>
 
-# 🛡️ ProTechTerrain AI-Powered Off-Road Autonomous Perception
+# 🛡️ ProTechTerrain: AI-Powered Off-Road Autonomous Perception
 
 > **Real-time semantic segmentation + dynamic hazard detection for Unmanned Ground Vehicles (UGVs) operating in unstructured desert terrain.**
 
