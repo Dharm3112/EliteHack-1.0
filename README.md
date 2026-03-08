@@ -84,11 +84,11 @@ ProTechTerrain is an end-to-end perception engine that fuses a **SegFormer Trans
 │                              │                        │         │
 │                              ▼                        ▼         │
 │                     ┌──────────────────────────────────┐        │
-│                     │       Fused Perception Output     │       │
-│                     │  • Colorized segmentation mask    │       │
-│                     │  • Bounding boxes + labels        │       │
-│                     │  • Entropy heatmap                │       │
-│                     │  • Active Learning flags          │       │
+│                     │       Fused Perception Output    │        │
+│                     │  • Colorized segmentation mask   │        │
+│                     │  • Bounding boxes + labels       │        │
+│                     │  • Entropy heatmap               │        │
+│                     │  • Active Learning flags         │        │
 │                     └──────────────────────────────────┘        │
 └─────────────────────────────────────────────────────────────────┘
 ```
