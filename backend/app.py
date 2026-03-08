@@ -9,7 +9,26 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 import cv2
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
+
+# Load a larger font for YOLO labels (clearly visible)
+LABEL_FONT = None
+_font_paths = [
+    "C:/Windows/Fonts/arialbd.ttf",      # Windows Bold
+    "C:/Windows/Fonts/arial.ttf",         # Windows Regular
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",  # Linux
+    "/System/Library/Fonts/Helvetica.ttc",  # macOS
+]
+for _fp in _font_paths:
+    try:
+        LABEL_FONT = ImageFont.truetype(_fp, 72)
+        print(f"[Font] Loaded: {_fp} at 72px")
+        break
+    except (IOError, OSError):
+        continue
+if LABEL_FONT is None:
+    LABEL_FONT = ImageFont.load_default()
+    print("[Font] WARNING: No truetype font found, using tiny default!")
 from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from transformers import SegformerForSemanticSegmentation, SegformerImageProcessor
@@ -220,9 +239,11 @@ async def predict(file: UploadFile = File(...)):
                 x1, y1, x2, y2 = box.xyxy[0].tolist()
                 draw.rectangle([x1, y1, x2, y2], outline="red", width=3)
                 
-                # Draw Label Background
-                draw.rectangle([x1, y1 - 20, x1 + len(entity_name)*8, y1], fill="red")
-                draw.text((x1 + 2, y1 - 18), entity_name, fill="white")
+                # Draw Label with large font
+                bbox = LABEL_FONT.getbbox(entity_name)
+                text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+                draw.rectangle([x1, y1 - text_h - 8, x1 + text_w + 8, y1], fill="red")
+                draw.text((x1 + 4, y1 - text_h - 6), entity_name, fill="white", font=LABEL_FONT)
     
     # ---- ENCODE AND RETURN ----
     buffered_mask = io.BytesIO()
@@ -264,15 +285,9 @@ def process_video_frame(image_data: bytes) -> str:
         
     image = Image.open(io.BytesIO(image_data)).convert("RGB")
     
-    # Resize server-side to max 320px wide as a safety net for fast inference
-    max_w = 320
-    if image.width > max_w:
-        ratio = max_w / image.width
-        image = image.resize((max_w, int(image.height * ratio)), Image.Resampling.BILINEAR)
-    
-    # YOLO at 160px resolution with half-precision for maximum speed
+    # YOLO at 640px resolution with half-precision for maximum speed
     use_half = device.type == 'cuda'
-    yolo_results = yolo_model(image, imgsz=160, half=use_half, verbose=False) 
+    yolo_results = yolo_model(image, imgsz=640, half=use_half, verbose=False) 
     
     # Only draw if there are actual detections — skip PIL overhead otherwise
     has_detections = False
@@ -289,11 +304,14 @@ def process_video_frame(image_data: bytes) -> str:
                 if cls_id in DYNAMIC_OBJECTS:
                     entity_name = DYNAMIC_OBJECTS[cls_id]
                     x1, y1, x2, y2 = box.xyxy[0].tolist()
-                    draw.rectangle([x1, y1, x2, y2], outline="red", width=2)
-                    draw.text((x1, y1 - 12), entity_name, fill="red")
+                    draw.rectangle([x1, y1, x2, y2], outline="red", width=4)
+                    bbox = LABEL_FONT.getbbox(entity_name)
+                    text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+                    draw.rectangle([x1, y1 - text_h - 10, x1 + text_w + 10, y1], fill="red")
+                    draw.text((x1 + 5, y1 - text_h - 8), entity_name, fill="white", font=LABEL_FONT)
                 
     buffered_overlay = io.BytesIO()
-    image.save(buffered_overlay, format="JPEG", quality=30, optimize=False) 
+    image.save(buffered_overlay, format="JPEG", quality=85, optimize=False) 
     return base64.b64encode(buffered_overlay.getvalue()).decode("utf-8")
 
 @app.websocket("/ws/stream")

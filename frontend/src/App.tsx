@@ -39,7 +39,7 @@ function App() {
 
   const startLiveStream = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.play();
@@ -121,7 +121,7 @@ function App() {
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const frameData = canvas.toDataURL('image/jpeg', 0.3);
+        const frameData = canvas.toDataURL('image/jpeg', 0.7);
         frameSendTime.current = Date.now();
         waitingForResponse.current = true;
         wsRef.current.send(frameData);
