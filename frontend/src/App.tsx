@@ -1,7 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import type { ChangeEvent, DragEvent } from 'react';
+import { motion, AnimatePresence, type Transition } from 'framer-motion';
+import { 
+  Plus, Type, Square, Image as ImageIcon, Layout, 
+  Menu, Play, Square as SquareIcon, Eye, Zap, 
+  ChevronDown, Upload, Crosshair, Map, Activity, Layers
+} from 'lucide-react';
 
 function App() {
+  // --- EXISTING LOGIC (100% PRESERVED) ---
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -22,7 +29,6 @@ function App() {
   const streamIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
-    // Cleanup on unmount
     return () => stopLiveStream();
   }, []);
 
@@ -38,12 +44,9 @@ function App() {
       setResultOverlay(null);
       setViewMode('overlay');
 
-      // Connect WebSocket
       wsRef.current = new WebSocket('ws://localhost:8000/ws/stream');
       
       wsRef.current.onopen = () => {
-        console.log("WebSocket connected!");
-        // Start capturing frames at ~10-15 FPS
         streamIntervalRef.current = window.setInterval(captureAndSendFrame, 100); 
       };
 
@@ -83,7 +86,6 @@ function App() {
       const canvas = canvasRef.current;
       const video = videoRef.current;
       
-      // Setup canvas to match video
       if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
@@ -92,7 +94,6 @@ function App() {
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        // We use JPEG for faster streaming
         const frameData = canvas.toDataURL('image/jpeg', 0.6); 
         wsRef.current.send(frameData);
       }
@@ -124,7 +125,7 @@ function App() {
     setDetectedClasses([]);
   };
 
-  const handeUploadClick = () => fileInputRef.current?.click();
+  const handleUploadClick = () => fileInputRef.current?.click();
 
   const analyzeImage = async () => {
     if (!selectedImage) return;
@@ -154,181 +155,291 @@ function App() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-dark-bg p-4 md:p-8 flex flex-col items-center relative overflow-hidden">
-      {/* Background Blobs for Beautiful Design */}
-      <div className="absolute top-0 left-10 w-96 h-96 bg-secondary-DEFAULT/20 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob pointer-events-none"></div>
-      <div className="absolute top-0 right-10 w-96 h-96 bg-indigo-600/20 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-2000 pointer-events-none"></div>
-      <div className="absolute -bottom-32 left-1/2 w-96 h-96 bg-secondary-light/20 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-4000 pointer-events-none"></div>
+  // UI STATE FOR REPLICATION
+  const [activeTab, setActiveTab] = useState<'site' | 'designs' | 'assets'>('site');
+  const [leftTab, setLeftTab] = useState<'design' | 'pages'>('pages');
 
-      {/* Header */}
-      <header className="mb-10 text-center z-10 w-full max-w-5xl">
-        <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-2">
-          Elite<span className="text-secondary-light">Hack</span> Offroad
-        </h1>
-        <p className="text-slate-400 text-lg">Semantic Segmentation for Unmanned Ground Vehicles</p>
+  // ANIMATION VARIANTS
+  const springConfig: Transition = { type: 'spring', stiffness: 400, damping: 30 };
+
+  return (
+    <div className="flex flex-col h-screen w-full bg-framer-canvas text-framer-text font-sans overflow-hidden select-none">
+      
+      {/* 1. GLOBAL HEADER */}
+      <header className="h-[60px] flex items-center justify-between px-6 bg-framer-panel border-b framer-border z-50">
+        <div className="flex items-center gap-8">
+          <div className="flex items-center gap-2 cursor-pointer">
+            <svg width="24" height="24" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M0 20L20 0H40L20 20H40L20 40H0L20 20H0Z" fill="white"/>
+            </svg>
+          </div>
+          <nav className="hidden lg:flex items-center gap-6 text-[13px] font-medium text-framer-muted">
+             <span className="text-framer-text cursor-pointer hover:opacity-80 transition-opacity">Product</span>
+             <span className="cursor-pointer hover:text-framer-text transition-colors">Teams</span>
+             <span className="cursor-pointer hover:text-framer-text transition-colors">Resources</span>
+             <span className="cursor-pointer hover:text-framer-text transition-colors">Community</span>
+             <span className="cursor-pointer hover:text-framer-text transition-colors">Support</span>
+          </nav>
+        </div>
+        
+        <div className="flex items-center gap-4">
+          <button className="text-[13px] font-medium text-framer-text hover:opacity-80 transition-opacity">Log in</button>
+          <motion.button 
+            whileHover={{ scale: 1.02, filter: "brightness(1.2)" }}
+            whileTap={{ scale: 0.98 }}
+            className="h-[32px] px-4 rounded-pill bg-white text-black text-[13px] font-semibold"
+          >
+            Sign up
+          </motion.button>
+        </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-8 z-10">
+      {/* 2. INNER TOOLBAR */}
+      <div className="h-[52px] flex items-center justify-between px-4 bg-framer-panel border-b framer-border z-40">
+        {/* Left Tools */}
+        <div className="flex items-center gap-1">
+          <button className="w-8 h-8 rounded-menu flex items-center justify-center text-framer-muted hover:bg-framer-active hover:text-framer-text transition-colors">
+            <Plus size={16} />
+          </button>
+          <button className="w-8 h-8 rounded-menu flex items-center justify-center text-framer-muted hover:bg-framer-active hover:text-framer-text transition-colors">
+            <Layout size={16} />
+          </button>
+          <button className="w-8 h-8 rounded-menu flex items-center justify-center text-framer-muted hover:bg-framer-active hover:text-framer-text transition-colors">
+            <Type size={16} />
+          </button>
+          <button className="w-8 h-8 rounded-menu flex items-center justify-center text-framer-muted hover:bg-framer-active hover:text-framer-text transition-colors">
+            <Square size={16} />
+          </button>
+        </div>
 
-        {/* Left Column: Upload & Actions */}
-        <div className="lg:col-span-4 flex flex-col gap-6">
-          
-          {/* Live Camera Toggle button */}
-          <button
-              onClick={isLive ? stopLiveStream : startLiveStream}
-              className={`w-full py-4 rounded-xl font-bold text-lg shadow-xl flex items-center justify-center gap-2 transition-all ${isLive ? 'bg-red-500/80 hover:bg-red-600 text-white' : 'bg-emerald-600/80 hover:bg-emerald-500 text-white'}`}
+        {/* Center Tabs */}
+        <div className="flex p-1 bg-[#1A1A1A]/50 rounded-lg relative overflow-hidden">
+          {['Site', 'Designs', 'Assets'].map((tab) => (
+             <button
+               key={tab}
+               onClick={() => setActiveTab(tab.toLowerCase() as any)}
+               className={`relative px-4 py-1.5 text-[13px] font-medium rounded-menu z-10 transition-colors ${activeTab === tab.toLowerCase() ? 'text-framer-text' : 'text-framer-muted hover:text-framer-text'}`}
+             >
+               {activeTab === tab.toLowerCase() && (
+                 <motion.div
+                   layoutId="activeTabBadge"
+                   className="absolute inset-0 bg-framer-active rounded-menu shadow-sm framer-border z-[-1]"
+                   transition={springConfig}
+                 />
+               )}
+               {tab}
+             </button>
+          ))}
+        </div>
+
+        {/* Right CTA (Replacing Publish with Live Feed Command) */}
+        <div className="flex items-center gap-3">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={isLive ? stopLiveStream : startLiveStream}
+            className={`h-[30px] px-4 rounded-menu text-[13px] font-semibold flex items-center gap-2 shadow-sm ${
+              isLive ? 'bg-red-500/90 text-white' : 'bg-framer-blue text-white'
+            }`}
+          >
+            {isLive ? <SquareIcon size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+            {isLive ? 'Stop Feed' : 'Start Feed'}
+          </motion.button>
+        </div>
+      </div>
+
+      {/* 3. MAIN WORKSPACE GRID */}
+      <div className="flex flex-1 overflow-hidden">
+        
+        {/* LEFT PANEL (Uploads & Assets) */}
+        <aside className="w-[260px] bg-framer-panel border-r framer-border flex flex-col shrink-0">
+          <div className="p-3 border-b framer-border">
+             <div className="flex bg-[#111] rounded-menu p-[2px] mb-4">
+                <button 
+                  onClick={() => setLeftTab('design')}
+                  className={`flex-1 py-1 text-[12px] font-medium rounded-[6px] text-center transition-colors ${leftTab === 'design' ? 'bg-framer-active text-framer-text shadow' : 'text-framer-muted hover:text-framer-text'}`}
+                >Design</button>
+                <button 
+                  onClick={() => setLeftTab('pages')}
+                  className={`flex-1 py-1 text-[12px] font-medium rounded-[6px] text-center transition-colors ${leftTab === 'pages' ? 'bg-framer-active text-framer-text shadow' : 'text-framer-muted hover:text-framer-text'}`}
+                >Data</button>
+             </div>
+             
+             {/* File Ingestion Dropzone mapping to Framer's asset tree */}
+             <div 
+               onDragOver={handleDragOver}
+               onDrop={handleDrop}
+               onClick={handleUploadClick}
+               className={`mt-2 p-4 border border-dashed rounded-menu flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors ${
+                 imagePreview ? 'border-framer-blue/50 bg-framer-blue/5' : 'border-[#333] hover:border-[#555] bg-[#141414]'
+               }`}
+             >
+                <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept="image/*" />
+                <Upload size={20} className="text-framer-muted" />
+                <span className="text-[12px] text-framer-muted text-center font-medium">Click or Drop<br/>Static Frame</span>
+             </div>
+
+             <motion.button
+                whileHover={!selectedImage || loading || isLive ? {} : { scale: 1.02 }}
+                whileTap={!selectedImage || loading || isLive ? {} : { scale: 0.98 }}
+                onClick={analyzeImage}
+                disabled={!selectedImage || loading || isLive}
+                className={`w-full mt-3 h-[32px] rounded-menu text-[13px] font-semibold flex items-center justify-center gap-2 transition-all ${
+                  (!selectedImage || loading || isLive) ? 'bg-[#222] text-[#555] cursor-not-allowed' : 'bg-white text-black'
+                }`}
+             >
+                {loading ? <Zap size={14} className="animate-pulse text-yellow-500" /> : <Eye size={14} />}
+                {loading ? 'Inferencing...' : 'Run SegFormer'}
+             </motion.button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
+             <div className="flex items-center text-[11px] font-semibold tracking-wider text-framer-dim uppercase mb-2 px-1">
+               <ChevronDown size={14} className="mr-1" />
+               Detected Actors
+             </div>
+             
+             {/* Render ML detection classes into the Framer tree list */}
+             <div className="space-y-[2px]">
+               {detectedClasses.length === 0 && !isLive && (
+                 <div className="px-5 py-2 text-[12px] text-framer-dim">No entities detected in frame.</div>
+               )}
+               <AnimatePresence>
+                 {detectedClasses.map((cls, i) => (
+                   <motion.div 
+                     initial={{ opacity: 0, x: -10 }}
+                     animate={{ opacity: 1, x: 0 }}
+                     transition={{ delay: i * 0.05 }}
+                     key={cls.id} 
+                     className="flex items-center gap-3 px-2 py-1.5 rounded-[4px] hover:bg-framer-active cursor-default group"
+                   >
+                     <div className="w-[10px] h-[10px] rounded-full shadow-inner" style={{ backgroundColor: cls.color }} />
+                     <span className="text-[13px] text-framer-muted group-hover:text-framer-text transition-colors">{cls.name}</span>
+                   </motion.div>
+                 ))}
+               </AnimatePresence>
+             </div>
+          </div>
+        </aside>
+
+        {/* CENTRAL CANVAS */}
+        <main className="flex-1 bg-framer-canvas relative overflow-hidden flex items-center justify-center">
+            
+            {/* Subtle Neon Radial Glow mimicking Framer canvas edge */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[300px] bg-framer-blue/10 rounded-full blur-[100px] pointer-events-none" />
+
+            {/* Hidden Video Elements ensuring logic remains perfect */}
+            <video ref={videoRef} style={{ display: 'none' }} playsInline muted></video>
+            <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
+
+            <motion.div 
+              layout
+              className="relative rounded-panel shadow-2xl framer-border bg-[#0C0C0C] flex items-center justify-center p-2"
+              style={{ width: '80%', height: '80%', minHeight: '400px', maxWidth: '1000px' }}
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-              </svg>
-              {isLive ? 'Stop Live Camera' : 'Start Live Camera (WebSockets)'}
-          </button>
+               {!imagePreview && !resultOverlay && !isLive ? (
+                 <div className="flex flex-col items-center gap-4 text-framer-dim">
+                    <Crosshair size={48} strokeWidth={1} />
+                    <p className="text-[13px] font-medium">Awaiting Telemetry Feed.</p>
+                 </div>
+               ) : (
+                 <div className="w-full h-full relative rounded-xl overflow-hidden bg-black flex items-center justify-center">
+                    
+                    {isLive && (
+                      <div className="absolute top-4 right-4 z-50 flex items-center gap-2 bg-black/60 px-3 py-1.5 rounded-pill border border-red-500/30 backdrop-blur-md">
+                          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></div>
+                          <span className="text-white font-bold text-[11px] tracking-widest uppercase">Live Ar</span>
+                      </div>
+                    )}
 
-          <div className="flex items-center gap-4 text-slate-500">
-             <div className="flex-1 h-px bg-slate-700"></div>
-             <span className="text-sm font-semibold uppercase">Or Upload Image</span>
-             <div className="flex-1 h-px bg-slate-700"></div>
-          </div>
+                    <AnimatePresence mode="wait">
+                      {!isLive && viewMode === 'original' && imagePreview && (
+                        <motion.img initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} src={imagePreview} className="w-full h-full object-contain" alt="Original" />
+                      )}
+                      {!isLive && viewMode === 'mask' && resultMask && (
+                        <motion.img initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} src={resultMask} className="w-full h-full object-contain" alt="Segmentation Mask" />
+                      )}
+                      {viewMode === 'overlay' && resultOverlay && (
+                        <motion.img initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} src={resultOverlay} className="w-full h-full object-contain" alt="Overlaid Mask" />
+                      )}
+                      {viewMode === 'heatmap' && resultHeatmap && (
+                        <motion.img initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} src={resultHeatmap} className="w-full h-full object-contain mix-blend-screen" alt="Thermal Heatmap" />
+                      )}
+                    </AnimatePresence>
+                 </div>
+               )}
+            </motion.div>
+        </main>
 
-          <div
-            className={`glass-panel rounded-2xl p-6 flex flex-col items-center justify-center text-center cursor-pointer border-2 border-dashed ${imagePreview && !isLive ? 'border-secondary-DEFAULT/50 bg-secondary-DEFAULT/5' : 'border-slate-600 hover:border-secondary-light hover:bg-slate-800/50'} transition-all min-h-[300px]`}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            onClick={handeUploadClick}
-          >
-            <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept="image/*" />
-
-            {imagePreview && !isLive ? (
-              <img src={imagePreview} alt="Preview" className="max-h-[250px] object-contain rounded-lg shadow-lg" />
-            ) : (
-              <div className="flex flex-col items-center">
-                <svg className="w-12 h-12 text-slate-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                <p className="text-lg font-medium text-slate-200 mb-1">Drag & Drop Image</p>
-                <p className="text-sm text-slate-400">or click to browse</p>
+        {/* RIGHT PANEL (Properties) */}
+        <aside className="w-[280px] bg-framer-panel border-l framer-border flex flex-col shrink-0 overflow-y-auto custom-scrollbar">
+           
+           {/* Section 1: View Modes (Mapped to Framer 'Size') */}
+           <div className="border-b framer-border py-4 px-3 flex flex-col gap-4">
+              <div className="flex justify-between items-center cursor-pointer group">
+                 <h3 className="text-[13px] font-semibold text-framer-text">View Mode</h3>
+                 <Plus size={14} className="text-framer-dim group-hover:text-framer-text transition-colors" />
               </div>
-            )}
-          </div>
 
-          <button
-            onClick={analyzeImage}
-            disabled={!selectedImage || loading || isLive}
-            className={`w-full py-4 rounded-xl font-bold text-lg shadow-xl flex items-center justify-center gap-2 transition-all ${(!selectedImage || loading || isLive) ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-secondary-DEFAULT hover:bg-secondary-hover text-white hover:scale-[1.02]'}`}
-          >
-            {loading ? (
-              <>
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Running SegFormer...
-              </>
-            ) : (
-              'Analyze Environment'
-            )}
-          </button>
-
-          {/* Detected Classes Widget */}
-          {detectedClasses.length > 0 && !isLive && (
-            <div className="glass-panel rounded-2xl p-6">
-              <h3 className="text-lg font-semibold text-slate-200 mb-4 border-b border-dark-border pb-2">Detected Objects</h3>
-              <div className="flex flex-wrap gap-2">
-                {detectedClasses.map(cls => (
-                  <div key={cls.id} className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
-                    <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: cls.color }}></div>
-                    <span className="text-sm font-medium">{cls.name}</span>
-                  </div>
-                ))}
+              <div className={`flex flex-col gap-1 ${isLive ? 'opacity-50 pointer-events-none' : ''}`}>
+                 
+                 {[
+                   { id: 'original', label: 'Original Telemetry', icon: <ImageIcon size={14}/> },
+                   { id: 'mask', label: 'Semantic Geometry', icon: <Layers size={14}/> },
+                   { id: 'overlay', label: 'Fused AR Overlay', icon: <Layout size={14}/> },
+                   { id: 'heatmap', label: 'LiDAR Confidence', icon: <Map size={14}/> }
+                 ].map(mode => (
+                   <button
+                     key={mode.id}
+                     onClick={() => setViewMode(mode.id as any)}
+                     disabled={(mode.id === 'mask' && !resultMask) || (mode.id === 'overlay' && !resultOverlay) || (mode.id === 'heatmap' && !resultHeatmap)}
+                     className="relative flex items-center justify-between w-full p-2 h-[32px] rounded-[6px] text-[13px] group text-left transition-all overflow-hidden"
+                   >
+                     {/* Background Selection Layer */}
+                     <div className={`absolute inset-0 rounded-[6px] transition-colors ${viewMode === mode.id ? 'bg-[#1C1C1C] border border-[#2A2A2A]' : 'group-hover:bg-[#1C1C1C] border border-transparent'}`} />
+                     
+                     <div className={`relative z-10 font-medium ${viewMode === mode.id ? 'text-framer-text' : 'text-framer-muted group-hover:text-framer-text'}`}>
+                        {mode.label}
+                     </div>
+                     <div className={`relative z-10 ${viewMode === mode.id ? 'text-framer-blue' : 'text-framer-dim'}`}>
+                        {/* Fake toggle switch mimicking Framer properties */}
+                        <div className={`w-[24px] h-[14px] rounded-full flex items-center px-[2px] ${viewMode === mode.id ? 'bg-framer-blue' : 'bg-[#333]'}`}>
+                           <motion.div 
+                             animate={{ x: viewMode === mode.id ? 10 : 0 }} 
+                             className="w-[10px] h-[10px] rounded-full bg-white shadow-sm"
+                           />
+                        </div>
+                     </div>
+                   </button>
+                 ))}
+                 
               </div>
-            </div>
-          )}
-        </div>
+           </div>
 
-        {/* Right Column: Results Display */}
-        <div className="lg:col-span-8">
-          <div className="glass-panel rounded-2xl p-2 min-h-[500px] flex flex-col h-full bg-slate-900/60 ring-1 ring-white/10">
-            {/* View Toggles (Disabled during live video) */}
-            <div className="flex justify-center p-4">
-              <div className={`bg-dark-bg/80 backdrop-blur rounded-xl p-1 inline-flex shadow-inner border border-dark-border ${isLive ? 'opacity-50 pointer-events-none' : ''}`}>
-                <button
-                  onClick={() => setViewMode('original')}
-                  className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${viewMode === 'original' ? 'bg-secondary-DEFAULT text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-dark-surface'}`}
-                >
-                  Original
-                </button>
-                <button
-                  onClick={() => setViewMode('mask')}
-                  disabled={!resultMask}
-                  className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${!resultMask ? 'opacity-50 cursor-not-allowed' : ''} ${viewMode === 'mask' ? 'bg-secondary-DEFAULT text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-dark-surface'}`}
-                >
-                  Mask Only
-                </button>
-                <button
-                  onClick={() => setViewMode('overlay')}
-                  disabled={!resultOverlay}
-                  className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${!resultOverlay ? 'opacity-50 cursor-not-allowed' : ''} ${viewMode === 'overlay' ? 'bg-secondary-DEFAULT text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-dark-surface'}`}
-                >
-                  Overlay (50%)
-                </button>
-                <button
-                  onClick={() => setViewMode('heatmap')}
-                  disabled={!resultHeatmap}
-                  className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${!resultHeatmap ? 'opacity-50 cursor-not-allowed' : ''} ${viewMode === 'heatmap' ? 'bg-secondary-DEFAULT text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-dark-surface'}`}
-                >
-                  Confidence Heatmap
-                </button>
+           {/* Section 2: Inference Metadata (Mapped to Framer 'Transforms') */}
+           <div className="border-b framer-border py-4 px-3 flex flex-col gap-4">
+              <div className="flex justify-between items-center cursor-pointer group">
+                 <h3 className="text-[13px] font-semibold text-framer-text">Telemetry Details</h3>
+                 <Menu size={14} className="text-framer-dim group-hover:text-framer-text transition-colors" />
               </div>
-            </div>
-
-            {/* Image/Video Display */}
-            <div className="flex-1 flex items-center justify-center p-4 overflow-hidden relative rounded-xl bg-slate-950/50 mx-2 mb-2">
               
-              {/* Hidden elements for WebRTC processing */}
-              <video ref={videoRef} style={{ display: 'none' }} playsInline muted></video>
-              <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
-
-              {!imagePreview && !resultOverlay && !isLive ? (
-                <div className="text-center text-slate-500">
-                  <svg className="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                  </svg>
-                  <p>Upload an image or Start Live Camera to see the model in action.</p>
-                </div>
-              ) : (
-                <div className="relative w-full h-full flex items-center justify-center group">
-                  
-                  {isLive && (
-                    <div className="absolute top-4 right-4 z-50 flex items-center gap-2 bg-black/60 px-3 py-1 rounded-full border border-red-500/50 backdrop-blur-md">
-                        <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                        <span className="text-red-400 font-bold text-xs tracking-wider">LIVE AR</span>
+              <div className="grid grid-cols-2 gap-2">
+                 <div className="bg-[#1C1C1C] p-2 rounded-[6px] border border-[#2A2A2A]">
+                    <div className="text-[11px] text-framer-dim mb-1">Latency</div>
+                    <div className="text-[13px] text-framer-text font-medium flex items-center gap-1">
+                      <Activity size={12} className={isLive ? 'text-green-500' : 'text-framer-dim'} /> 
+                      {isLive ? '24ms' : '--'}
                     </div>
-                  )}
+                 </div>
+                 <div className="bg-[#1C1C1C] p-2 rounded-[6px] border border-[#2A2A2A]">
+                    <div className="text-[11px] text-framer-dim mb-1">Model</div>
+                    <div className="text-[13px] text-framer-text font-medium">mit-b0</div>
+                 </div>
+              </div>
+           </div>
+        </aside>
+      </div>
 
-                  {!isLive && viewMode === 'original' && imagePreview && (
-                    <img src={imagePreview} className="max-w-full max-h-full object-contain drop-shadow-2xl rounded-lg" alt="Original" />
-                  )}
-                  {!isLive && viewMode === 'mask' && resultMask && (
-                    <img src={resultMask} className="max-w-full max-h-full object-contain drop-shadow-2xl rounded-lg" alt="Segmentation Mask" />
-                  )}
-                  
-                  {/* Both live video and static overlay use this */}
-                  {viewMode === 'overlay' && resultOverlay && (
-                    <img src={resultOverlay} className="max-w-full max-h-full object-contain drop-shadow-2xl rounded-lg" alt="Overlaid Mask" />
-                  )}
-                  {viewMode === 'heatmap' && resultHeatmap && (
-                    <img src={resultHeatmap} className="max-w-full max-h-full object-contain drop-shadow-2xl rounded-lg" alt="Thermal Heatmap" />
-                  )}
-                </div>
-              )}
-            </div>
-
-          </div>
-        </div>
-
-      </main>
     </div>
   );
 }

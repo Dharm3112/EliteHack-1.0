@@ -8,34 +8,24 @@ export default {
     theme: {
         extend: {
             colors: {
-                primary: {
-                    50: '#eef2ff',
-                    100: '#e0e7ff',
-                    500: '#6366f1',
-                    600: '#4f46e5',
-                    900: '#312e81',
-                },
-                secondary: {
-                    DEFAULT: '#1E3A8A', // The requested Dark Blue
-                    hover: '#1e40af',
-                    light: '#3b82f6',
-                },
-                dark: {
-                    bg: '#0f172a',    // slate-900 background
-                    surface: '#1e293b', // slate-800 surfaces
-                    border: '#334155',  // slate-700 borders
+                framer: {
+                    canvas: '#000000',
+                    panel: '#0F0F0F',
+                    active: '#1C1C1C',
+                    border: '#1A1A1A',
+                    blue: '#0099FF',
+                    text: '#FFFFFF',
+                    muted: '#8E8E8E',
+                    dim: '#555555'
                 }
             },
-            animation: {
-                'blob': 'blob 7s infinite',
+            borderRadius: {
+                'panel': '16px',
+                'pill': '999px',
+                'menu': '8px'
             },
-            keyframes: {
-                blob: {
-                    '0%': { transform: 'translate(0px, 0px) scale(1)' },
-                    '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
-                    '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
-                    '100%': { transform: 'translate(0px, 0px) scale(1)' },
-                }
+            fontFamily: {
+                sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
             }
         },
     },
