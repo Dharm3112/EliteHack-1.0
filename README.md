@@ -1,73 +1,54 @@
-# EliteHack-1.0: Off-Road Semantic Segmentation
+# EliteHack-1.0: Advanced Off-Road Semantic Segmentation
 
-EliteHack-1.0 is an AI-powered project designed to provide real-time semantic segmentation for unstructured off-road environments. Using advanced deep learning, it enables machines to understand complex natural terrains by identifying specific elements like rocks, logs, and vegetation.
+EliteHack-1.0 is an AI-driven vision system designed to provide high-precision semantic segmentation for unstructured off-road environments. By leveraging deep learning, the system transforms raw visual data into detailed terrain maps, enabling autonomous systems to navigate complex natural landscapes where traditional road rules do not apply.
+
+## 🚧 Project Status: 75% Complete
+
+* **Current State:** The core engine is fully functional and successfully segments off-road terrain using demo test images.
+* **The Road Ahead (Remaining 25%):** Development is currently focused on expanding the model's capabilities to detect dynamic objects—both living (humans, wildlife) and non-living (cars, ATVs, equipment)—to ensure safety in shared environments.
 
 ## 🚩 Problem Statement
 
-Autonomous navigation in off-road environments presents unique challenges that standard self-driving systems (designed for city streets) cannot handle:
+Autonomous navigation in the wild is significantly more difficult than city driving because:
 
-* **Lack of Structure:** There are no lane lines, traffic signs, or paved roads to follow.
-* **Critical Obstacles:** Rare but dangerous hazards like fallen logs and sharp rocks are often overlooked by general AI models.
-* **Visual Ambiguity:** Distinguishing between "drivable" dry grass and "non-drivable" thick bushes requires high-precision pixel-level understanding.
+* **Lack of Structure:** There are no lane markings, traffic signs, or paved boundaries to guide the system.
+* **Critical Hazards:** Natural obstacles like fallen logs and sharp rocks are often small but can cause catastrophic damage if not identified.
+* **Terrain Ambiguity:** Distinguishing between safe "drivable" surfaces like dry grass and "non-drivable" hazards like thick lush bushes requires pixel-level accuracy.
 
 ## 💡 Solution
 
-The project implements a specialized vision system to solve these challenges:
+The project addresses these challenges through a specialized vision and training pipeline:
 
-* **SegFormer Architecture:** Utilizes the lightweight **nvidia/mit-b0** model, optimized for high-speed inference (under 50ms) without sacrificing accuracy.
-* **Hard-Class Prioritization:** Employs **Focal Loss** and extreme class weighting (e.g., weighting "Logs" 128x higher) to ensure the AI detects rare, critical hazards.
-* **10-Class Terrain Mapping:** Segments images into 10 distinct categories: Background, Trees, Lush Bushes, Dry Grass, Dry Bushes, Ground Clutter, Logs, Rocks, Landscape, and Sky.
-* **Interactive Visualization:** A web-based interface that provides both raw segmentation masks and 50% transparent overlays for immediate terrain assessment.
-
-## 🚀 Key Features
-
-* **Real-time API:** High-performance backend powered by FastAPI for quick image processing.
-* **Visual Insights:** Returns detected class names, IDs, and their corresponding colors alongside processed images.
-* **Advanced Training:** Features a robust training pipeline with Cosine Annealing learning rate schedules and automated model checkpointing.
-* **Modern Frontend:** A responsive user interface built with React, TypeScript, and Tailwind CSS.
+* **SegFormer Architecture:** Uses the lightweight **nvidia/mit-b0** model, optimized for real-time performance and low-latency inference.
+* **Intelligent Hazard Prioritization:** Implements **Focal Loss** and heavy class-weighting (weighting "Logs" 128x higher) to ensure the AI never misses rare but dangerous obstacles.
+* **10-Class Segmentation:** Identifies and maps: Background, Trees, Lush Bushes, Dry Grass, Dry Bushes, Ground Clutter, Logs, Rocks, Landscape, and Sky.
+* **Seamless Visualization:** A web-based dashboard provides a raw segmentation mask and a 50% transparent overlay for real-time terrain verification.
 
 ## 🛠 Tech Stack
 
 * **AI/ML:** PyTorch, Hugging Face Transformers (SegFormer), Albumentations.
-* **Backend:** FastAPI, Uvicorn, Pillow (PIL), NumPy.
+* **Backend:** FastAPI (Python), Uvicorn, Pillow (PIL), NumPy.
 * **Frontend:** React 18, TypeScript, Vite, Tailwind CSS.
-* **Optimization:** ONNX for model deployment and speed.
+* **Optimization:** ONNX for high-speed model deployment.
+
+## 🌍 Use Cases & Applications
+
+* **Autonomous Off-Road Vehicles:** Safe navigation for ATVs, scouting units, and rovers in unmapped wild terrain.
+* **Search & Rescue (SAR):** Helping rescue robots navigate debris-heavy disaster zones where standard infrastructure has been destroyed.
+* **Precision Agriculture:** Navigating automated farming equipment through unpaved fields and monitoring crop/vegetation health.
+* **Infrastructure Inspection:** Monitoring power line corridors or remote pipelines for vegetation encroachment.
+* **Military Reconnaissance:** Identifying natural cover (trees) and navigating hazardous terrain during scouting missions.
+* **Wildlife & Forestry:** Tracking changes in forest density or identifying erosion patterns in remote landscapes.
+* **Drone Navigation:** Enabling low-altitude flights to avoid collisions with natural obstacles like rocks or logs.
 
 ## 📂 Project Structure
 
-```text
-EliteHack-1.0/
-├── backend/            # FastAPI server and inference logic
-├── frontend/           # React + Vite web application
-├── scripts/            # Training, EDA, and model optimization scripts
-├── utils/              # Dataloaders, loss functions, and augmentations
-├── models/             # Saved model checkpoints and optimized ONNX files
-└── Dataset/            # Scripts for dataset management and processing
+* **`backend/`**: FastAPI application and inference engine.
+* **`frontend/`**: React-based dashboard for image analysis.
+* **`scripts/`**: Training pipelines, Exploratory Data Analysis (EDA), and ONNX optimization.
+* **`utils/`**: Core utilities for dataloading, custom loss functions, and image augmentations.
 
-```
-
-## 🌍 Use Cases
-
-* **Autonomous Off-Road Vehicles:** Safe navigation for ATVs and scouting units in wild terrain.
-* **Search & Rescue Robots:** Identifying clear paths through debris and "ground clutter" in disaster zones.
-* **Precision Agriculture:** Monitoring forest density and navigating unpaved fields for automated farming.
-* **Drone Navigation:** Avoiding low-level obstacles like trees and rocks during low-altitude flights.
-
-## ⚙️ Setup and Installation
-
-### Backend Setup
-
-1. Navigate to the `backend` directory.
-2. Install requirements: `pip install -r ../requirements.txt`.
-3. Start the API server: `uvicorn app:app --reload`.
-
-### Frontend Setup
-
-1. Navigate to the `frontend` directory.
-2. Install dependencies: `npm install`.
-3. Start the development server: `npm run dev`.
-
-## 🎨 Color Map Reference
+## 🎨 Terrain Color Map
 
 | Class | Color | Class | Color |
 | --- | --- | --- | --- |
@@ -76,4 +57,4 @@ EliteHack-1.0/
 | **Lush Bushes** | Light Green | **Rocks** | Gray |
 | **Dry Grass** | Khaki | **Landscape** | Sand |
 | **Dry Bushes** | Olive | **Sky** | Light Blue |
-| *(Source:)* |  |  |  |
+| *(Based on the internal COLOR_MAP configuration)* |  |  |  |
