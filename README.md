@@ -5,7 +5,7 @@ EliteHack-1.0 is an AI-driven vision system designed to provide high-precision s
 ## 🚧 Project Status: 75% Complete
 
 * **Current State:** The core engine is fully functional and successfully segments off-road terrain using demo test images.
-* **The Road Ahead (Remaining 25%):** Development is currently focused on expanding the model's capabilities to detect dynamic objects—both living (humans, wildlife) and non-living (cars, ATVs, equipment)—to ensure safety in shared environments.
+* **The Road Ahead (Remaining 25%):** Development is currently focused on expanding the model's capabilities to detect dynamic objects both living (humans, wildlife) and non-living (cars, ATVs, equipment) to ensure safety in shared environments.
 
 ## 🚩 Problem Statement
 
@@ -57,4 +57,4 @@ The project addresses these challenges through a specialized vision and training
 | **Lush Bushes** | Light Green | **Rocks** | Gray |
 | **Dry Grass** | Khaki | **Landscape** | Sand |
 | **Dry Bushes** | Olive | **Sky** | Light Blue |
-| *(Based on the internal COLOR_MAP configuration)* |  |  |  |
+
