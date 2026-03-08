@@ -3,6 +3,7 @@ import io
 import base64
 from datetime import datetime
 import asyncio
+from typing import Any
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -70,9 +71,9 @@ DYNAMIC_OBJECTS = {
     73: "Book"
 }
 # Global models
-seg_model = None
-seg_processor = None
-yolo_model = None
+seg_model: Any = None
+seg_processor: Any = None
+yolo_model: Any = None
 
 def load_models():
     global seg_model, seg_processor, yolo_model, DYNAMIC_OBJECTS
@@ -129,15 +130,18 @@ def colorize_mask(mask_numpy):
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
+    if seg_processor is None or seg_model is None or yolo_model is None:
+        return {"status": "error", "message": "Models not loaded yet"}
+    
     contents = await file.read()
     image = Image.open(io.BytesIO(contents)).convert("RGB")
     original_size = image.size[::-1] # (height, width)
     
     # ---- 1. STATIC TERRAIN (SegFormer) ----
-    inputs = seg_processor(images=image, return_tensors="pt").to(device)
+    inputs = seg_processor(images=image, return_tensors="pt").to(device) # type: ignore
     
     with torch.no_grad():
-        outputs = seg_model(**inputs)
+        outputs = seg_model(**inputs) # type: ignore
         
     logits = outputs.logits
     # Upsample to original image size
@@ -191,7 +195,7 @@ async def predict(file: UploadFile = File(...)):
     bbox_img = image.copy()
     
     # Run YOLO inference
-    yolo_results = yolo_model(image)
+    yolo_results = yolo_model(image) # type: ignore
     
     # Setup drawing context on the separate bbox image
     draw = ImageDraw.Draw(bbox_img)
@@ -250,25 +254,40 @@ async def predict(file: UploadFile = File(...)):
         "detected_classes": detected_classes
     }
 
-def process_video_frame(image_data):
+def process_video_frame(image_data: bytes) -> str:
+    if yolo_model is None:
+        return ""
+        
     image = Image.open(io.BytesIO(image_data)).convert("RGB")
     
-    # 1. Slash YOLO resolution (160) and use half-precision for speed
+    # Resize server-side to max 320px wide as a safety net for fast inference
+    max_w = 320
+    if image.width > max_w:
+        ratio = max_w / image.width
+        image = image.resize((max_w, int(image.height * ratio)), Image.BILINEAR)
+    
+    # YOLO at 160px resolution with half-precision for maximum speed
     yolo_results = yolo_model(image, imgsz=160, half=True, verbose=False) 
     
-    draw = ImageDraw.Draw(image)
-    for result in yolo_results:
-        for box in result.boxes:
-            cls_id = int(box.cls[0].item())
-            if cls_id in DYNAMIC_OBJECTS:
-                entity_name = DYNAMIC_OBJECTS[cls_id]
-                x1, y1, x2, y2 = box.xyxy[0].tolist()
-                # 2. Simplified drawing (removed the solid background rectangle to save MS)
-                draw.rectangle([x1, y1, x2, y2], outline="red", width=2)
-                draw.text((x1, y1 - 12), entity_name, fill="red")
+    # Only draw if there are actual detections — skip PIL overhead otherwise
+    has_detections = False
+    for result in yolo_results: # type: ignore
+        if len(result.boxes) > 0: # type: ignore
+            has_detections = True
+            break
+    
+    if has_detections:
+        draw = ImageDraw.Draw(image)
+        for result in yolo_results: # type: ignore
+            for box in result.boxes: # type: ignore
+                cls_id = int(box.cls[0].item())
+                if cls_id in DYNAMIC_OBJECTS:
+                    entity_name = DYNAMIC_OBJECTS[cls_id]
+                    x1, y1, x2, y2 = box.xyxy[0].tolist()
+                    draw.rectangle([x1, y1, x2, y2], outline="red", width=2)
+                    draw.text((x1, y1 - 12), entity_name, fill="red")
                 
     buffered_overlay = io.BytesIO()
-    # 3. Drop JPEG quality to 30 and disable optimization for instant encoding
     image.save(buffered_overlay, format="JPEG", quality=30, optimize=False) 
     return base64.b64encode(buffered_overlay.getvalue()).decode("utf-8")
 
@@ -278,7 +297,17 @@ async def websocket_endpoint(websocket: WebSocket):
     print("WebSocket connected for Live Video Stream!")
     try:
         while True:
+            # Receive the first available frame
             data = await websocket.receive_text()
+            
+            # --- DRAIN STALE FRAMES: consume any queued messages, keep only the latest ---
+            while True:
+                try:
+                    # Non-blocking check for more queued frames (0-second timeout)
+                    newer = await asyncio.wait_for(websocket.receive_text(), timeout=0.001)
+                    data = newer  # Overwrite with the fresher frame
+                except asyncio.TimeoutError:
+                    break  # No more queued frames, process the latest one
             
             if "," in data:
                 data = data.split(",")[1]
@@ -286,7 +315,7 @@ async def websocket_endpoint(websocket: WebSocket):
             image_data = base64.b64decode(data)
             
             # Offload heavy ML and PIL tasks to a thread to prevent blocking
-            overlay_b64 = await asyncio.to_thread(process_video_frame, image_data)
+            overlay_b64 = await asyncio.to_thread(process_video_frame, image_data) # type: ignore
             
             await websocket.send_json({
                 "status": "success",

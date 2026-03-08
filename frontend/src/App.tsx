@@ -24,10 +24,14 @@ function App() {
 
   // --- WebSocket & Live Video State ---
   const [isLive, setIsLive] = useState(false);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const streamIntervalRef = useRef<number | null>(null);
+  const waitingForResponse = useRef(false);
+  const frameSendTime = useRef<number>(0);
+  const streamActiveRef = useRef(false);
+  const rafIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => stopLiveStream();
@@ -35,7 +39,7 @@ function App() {
 
   const startLiveStream = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 384 } });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.play();
@@ -44,20 +48,30 @@ function App() {
       setImagePreview(null);
       setResultOverlay(null);
       setViewMode('overlay');
+      streamActiveRef.current = true;
+      waitingForResponse.current = false;
 
       wsRef.current = new WebSocket('ws://localhost:8000/ws/stream');
       
       wsRef.current.onopen = () => {
-        // Run at ~30 FPS (33ms) now that the backend is blazing fast!
-        streamIntervalRef.current = window.setInterval(captureAndSendFrame, 33); 
+        // Start the backpressure-driven capture loop
+        scheduleNextFrame();
       };
 
       wsRef.current.onmessage = (event) => {
+        // Measure round-trip latency
+        const rtt = Date.now() - frameSendTime.current;
+        setLatencyMs(rtt);
+
         const data = JSON.parse(event.data);
         if (data.status === 'success') {
           setResultOverlay(data.overlay_base64);
           if (data.heatmap_base64) setResultHeatmap(data.heatmap_base64);
         }
+
+        // Backend replied — unblock and immediately schedule the next frame
+        waitingForResponse.current = false;
+        scheduleNextFrame();
       };
 
       wsRef.current.onerror = (error) => {
@@ -72,7 +86,8 @@ function App() {
   };
 
   const stopLiveStream = () => {
-    if (streamIntervalRef.current) clearInterval(streamIntervalRef.current);
+    streamActiveRef.current = false;
+    if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
     if (wsRef.current) wsRef.current.close();
     if (videoRef.current && videoRef.current.srcObject) {
       const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
@@ -81,9 +96,19 @@ function App() {
     setIsLive(false);
     setResultOverlay(null);
     setResultHeatmap(null);
+    setLatencyMs(null);
+  };
+
+  const scheduleNextFrame = () => {
+    if (!streamActiveRef.current) return;
+    rafIdRef.current = requestAnimationFrame(captureAndSendFrame);
   };
 
   const captureAndSendFrame = () => {
+    if (!streamActiveRef.current) return;
+    // Backpressure: don't send another frame until the backend replied
+    if (waitingForResponse.current) return;
+
     if (wsRef.current?.readyState === WebSocket.OPEN && videoRef.current && canvasRef.current) {
       const canvas = canvasRef.current;
       const video = videoRef.current;
@@ -96,7 +121,9 @@ function App() {
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const frameData = canvas.toDataURL('image/jpeg', 0.6); 
+        const frameData = canvas.toDataURL('image/jpeg', 0.3);
+        frameSendTime.current = Date.now();
+        waitingForResponse.current = true;
         wsRef.current.send(frameData);
       }
     }
@@ -431,8 +458,8 @@ function App() {
                  <div className="bg-[#1C1C1C] p-2 rounded-[6px] border border-[#2A2A2A]">
                     <div className="text-[11px] text-framer-dim mb-1">Latency</div>
                     <div className="text-[13px] text-framer-text font-medium flex items-center gap-1">
-                      <Activity size={12} className={isLive ? 'text-green-500' : 'text-framer-dim'} /> 
-                      {isLive ? '24ms' : '--'}
+                      <Activity size={12} className={isLive ? (latencyMs && latencyMs < 150 ? 'text-green-500' : 'text-yellow-500') : 'text-framer-dim'} /> 
+                      {isLive && latencyMs ? `${latencyMs}ms` : '--'}
                     </div>
                  </div>
                  <div className="bg-[#1C1C1C] p-2 rounded-[6px] border border-[#2A2A2A]">
