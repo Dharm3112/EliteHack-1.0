@@ -4,10 +4,11 @@ import base64
 import torch
 import torch.nn.functional as F
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from transformers import SegformerForSemanticSegmentation, SegformerImageProcessor
+from ultralytics import YOLO
 
 app = FastAPI(title="Offroad Segmentation API")
 
@@ -40,17 +41,42 @@ COLOR_MAP = {
     9: [135, 206, 235]    # Sky - Light Blue
 }
 
-# Global model and processor
-model = None
-processor = None
+# Dynamic Objects we care about from COCO for YOLO (Mapping to readable names)
+DYNAMIC_OBJECTS = {
+    0: "Person",
+    1: "Bicycle",
+    2: "Car",
+    3: "Motorcycle",
+    5: "Bus",
+    7: "Truck",
+    15: "Bird",
+    16: "Cat",
+    17: "Dog",
+    18: "Horse",
+    19: "Sheep",
+    20: "Cow",
+    21: "Elephant",
+    22: "Bear",
+    23: "Zebra",
+    24: "Giraffe"
+}
 
-def load_model():
-    global model, processor
-    print("Loading processor...")
-    processor = SegformerImageProcessor.from_pretrained("nvidia/mit-b0")
+# Global models
+seg_model = None
+seg_processor = None
+yolo_model = None
+
+def load_models():
+    global seg_model, seg_processor, yolo_model
     
-    print("Loading model architecture...")
-    model = SegformerForSemanticSegmentation.from_pretrained(
+    print("Loading YOLOv8 (Dynamic Object Detection)...")
+    yolo_model = YOLO('yolov8n.pt') 
+
+    print("Loading SegFormer processor...")
+    seg_processor = SegformerImageProcessor.from_pretrained("nvidia/mit-b0")
+    
+    print("Loading SegFormer architecture...")
+    seg_model = SegformerForSemanticSegmentation.from_pretrained(
         "nvidia/mit-b0",
         num_labels=NUM_CLASSES,
         ignore_mismatched_sizes=True
@@ -69,16 +95,16 @@ def load_model():
         
     if weights_path:
         print(f"Loading custom weights from {weights_path}")
-        model.load_state_dict(torch.load(weights_path, map_location=device, weights_only=True))
+        seg_model.load_state_dict(torch.load(weights_path, map_location=device, weights_only=True))
     else:
         print("Warning: No custom trained weights found. Using base initialized model for UI testing.")
         
-    model.to(device)
-    model.eval()
+    seg_model.to(device)
+    seg_model.eval()
 
 @app.on_event("startup")
 async def startup_event():
-    load_model()
+    load_models()
 
 def colorize_mask(mask_numpy):
     h, w = mask_numpy.shape
@@ -93,11 +119,11 @@ async def predict(file: UploadFile = File(...)):
     image = Image.open(io.BytesIO(contents)).convert("RGB")
     original_size = image.size[::-1] # (height, width)
     
-    # Convert image to numpy for processor or directly use PIL
-    inputs = processor(images=image, return_tensors="pt").to(device)
+    # ---- 1. STATIC TERRAIN (SegFormer) ----
+    inputs = seg_processor(images=image, return_tensors="pt").to(device)
     
     with torch.no_grad():
-        outputs = model(**inputs)
+        outputs = seg_model(**inputs)
         
     logits = outputs.logits
     # Upsample to original image size
@@ -113,13 +139,39 @@ async def predict(file: UploadFile = File(...)):
     
     # Colorize
     color_mask = colorize_mask(pred_mask)
-    
-    # Convert color mask to base64 image
     color_img = Image.fromarray(color_mask)
     
     # Create an overlaid version (50% blend)
     overlaid_img = Image.blend(image, color_img, alpha=0.5)
     
+    # ---- 2. DYNAMIC HAZARDS (YOLOv8) ----
+    # Run YOLO inference
+    yolo_results = yolo_model(image)
+    
+    # Setup drawing context on the overlay image
+    draw = ImageDraw.Draw(overlaid_img)
+    dynamic_classes_found = set()
+    
+    # Process YOLO detections
+    for result in yolo_results:
+        boxes = result.boxes
+        for box in boxes:
+            cls_id = int(box.cls[0].item())
+            
+            # Check if it's an entity we care about
+            if cls_id in DYNAMIC_OBJECTS:
+                entity_name = DYNAMIC_OBJECTS[cls_id]
+                dynamic_classes_found.add(entity_name)
+                
+                # Draw Box (Red for hazards)
+                x1, y1, x2, y2 = box.xyxy[0].tolist()
+                draw.rectangle([x1, y1, x2, y2], outline="red", width=3)
+                
+                # Draw Label Background
+                draw.rectangle([x1, y1 - 20, x1 + len(entity_name)*8, y1], fill="red")
+                draw.text((x1 + 2, y1 - 18), entity_name, fill="white")
+    
+    # ---- ENCODE AND RETURN ----
     buffered_mask = io.BytesIO()
     color_img.save(buffered_mask, format="PNG")
     mask_b64 = base64.b64encode(buffered_mask.getvalue()).decode("utf-8")
@@ -128,9 +180,17 @@ async def predict(file: UploadFile = File(...)):
     overlaid_img.save(buffered_overlay, format="PNG")
     overlay_b64 = base64.b64encode(buffered_overlay.getvalue()).decode("utf-8")
     
-    # Get unique classes present in the prediction
+    # Get unique classes present in the Segmentation prediction
     unique_classes = np.unique(pred_mask)
     detected_classes = [{"id": int(c), "name": CLASS_NAMES[int(c)], "color": f"rgb({COLOR_MAP[int(c)][0]}, {COLOR_MAP[int(c)][1]}, {COLOR_MAP[int(c)][2]})"} for c in unique_classes]
+    
+    # Append YOLO classes to the tags list with a special hazard color (Red)
+    for idx, entity in enumerate(dynamic_classes_found):
+        detected_classes.append({
+            "id": 100 + idx, 
+            "name": f"Hazard: {entity}", 
+            "color": "rgb(255, 0, 0)"
+        })
     
     return {
         "status": "success",
