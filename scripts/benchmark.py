@@ -2,9 +2,11 @@ import os
 import sys
 import time
 import torch
+import torch.nn.utils.prune as prune
 import numpy as np
 from transformers import SegformerForSemanticSegmentation
 import onnxruntime as ort
+from onnxruntime.quantization import quantize_dynamic, QuantType
 
 # Add parent directory to path to find utils
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -37,6 +39,21 @@ def load_pytorch_model(device):
     model.to(device)
     model.eval()
     return model
+
+def prune_pytorch_model(model, amount=0.2):
+    print(f"\n--- Pruning Model Weights (Sparsity: {amount*100}%) ---")
+    pruned_count = 0
+    # Apply L1 Unstructured Pruning to Linear/Conv layers in the decoder
+    for name, module in model.named_modules():
+        if isinstance(module, torch.nn.Linear) or isinstance(module, torch.nn.Conv2d):
+            prune.l1_unstructured(module, name='weight', amount=amount)
+            # Make the pruning permanent so it exports efficiently
+            prune.remove(module, 'weight')
+            pruned_count += 1
+            
+    print(f"Successfully pruned {pruned_count} specific layers.")
+    return model
+
 
 def export_to_onnx(model, dummy_input, onnx_file_path):
     print(f"\nExporting PyTorch model to ONNX -> {onnx_file_path}")
@@ -83,12 +100,12 @@ def benchmark_pytorch(model, dummy_input, iterations=100):
         
     avg_ms = np.mean(times)
     fps = 1000 / avg_ms
-    print(f"PyTorch Average Latency: {avg_ms:.2f} ms")
-    print(f"PyTorch Current FPS: {fps:.2f}\n")
+    print(f"Average Latency: {avg_ms:.2f} ms")
+    print(f"Current FPS: {fps:.2f}\n")
     return avg_ms
 
-def benchmark_onnx(onnx_file_path, dummy_numpy, iterations=100):
-    print(f"--- Loading ONNX Runtime ---")
+def benchmark_onnx(onnx_file_path, dummy_numpy, iterations=100, label="ONNX Baseline"):
+    print(f"\n--- Loading {label} ---")
     
     # Try GPU/TensorRT if available
     providers = [
@@ -141,32 +158,62 @@ def main():
     models_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'models'))
     os.makedirs(models_dir, exist_ok=True)
     onnx_path = os.path.join(models_dir, "optimized_segformer.onnx")
+    onnx_quant_path = os.path.join(models_dir, "optimized_segformer_int8.onnx")
     
-    # 3. Export
-    export_to_onnx(model, dummy_input, onnx_path)
+    # 3. Apply Pruning
+    pruned_model = prune_pytorch_model(model, amount=0.20)
     
-    # 4. Benchmarking
+    # 4. Export Pruned Model to PyTorch 
+    export_to_onnx(pruned_model, dummy_input, onnx_path)
+    
+    # 5. Apply INT8 Dynamic Quantization
+    print("\n--- Applying INT8 Dynamic Quantization ---")
+    if os.path.exists(onnx_path):
+        quantize_dynamic(
+            model_input=onnx_path,
+            model_output=onnx_quant_path,
+            weight_type=QuantType.QUInt8
+        )
+        print(f"Quantization Successful: {onnx_quant_path}")
+    
+    # 6. Benchmarking Suite
+    print("\n=========================================")
+    print("      COMPUTE OPTIMIZATION PIPELINE      ")
     print("=========================================")
-    print("         PERFORMANCE COMPARISON          ")
-    print("=========================================")
-    pt_ms = benchmark_pytorch(model, dummy_input)
+    
+    # Test 1: Original architecture (unpruned)
+    raw_model = load_pytorch_model(device)
+    pt_ms = benchmark_pytorch(raw_model, dummy_input)
+    
+    # Test 2: Pruned architecture
+    print("\n[Testing Pruned PyTorch Model]")
+    pruned_ms = benchmark_pytorch(pruned_model, dummy_input)
     
     if os.path.exists(onnx_path):
-        onnx_ms = benchmark_onnx(onnx_path, dummy_numpy)
+        # Test 3: Standard ONNX graph
+        onnx_ms = benchmark_onnx(onnx_path, dummy_numpy, label="FP32 ONNX Graph")
         
-        if onnx_ms:
-            speedup = pt_ms / onnx_ms
-            diff = pt_ms - onnx_ms
-            print("=========================================")
-            print("                RESULTS                  ")
-            print("=========================================")
-            print(f"ONNX is {speedup:.2f}x faster!")
-            print(f"Latency reduced by {diff:.2f} ms per frame.")
-            if onnx_ms <= 50:
-                print("STATUS: SUCCESS. ONNX Model meets the < 50ms requirement for UGVs.")
-            else:
-                print("STATUS: WARNING. ONNX Model exceeds the 50ms budget. Needs TensorRT quantization.")
-            print("=========================================")
+        # Test 4: INT8 Quantized ONNX graph
+        onnx_quant_ms = benchmark_onnx(onnx_quant_path, dummy_numpy, label="INT8 Quantized ONNX Graph")
+        
+        print("=========================================")
+        print("           FINAL RESULTS TABLE           ")
+        print("=========================================")
+        print(f"1. PyTorch Baseline (FP32):   {pt_ms:.2f} ms")
+        print(f"2. PyTorch Pruned (FP32):     {pruned_ms:.2f} ms")
+        print(f"3. ONNX Graph (FP32):         {onnx_ms:.2f} ms")
+        print(f"4. ONNX Quantized (INT8):     {onnx_quant_ms:.2f} ms")
+        print("=========================================")
+        
+        best_ms = min(pt_ms, pruned_ms, onnx_ms, onnx_quant_ms)
+        speedup = pt_ms / best_ms
+        
+        print(f"\nOPTIMIZATION SUCCESS: Overall speedup is {speedup:.2f}x faster!")
+        if best_ms <= 50:
+            print("STATUS: PASSED. Model meets the strict < 50ms requirement for UGV autonomy.")
+        else:
+            print(f"STATUS: WARNING. Best latency is {best_ms:.2f} ms, missing the 50ms budget.")
+            print("Action Required: TensorRT hardware compilation or aggressive 40% pruning needed.")
 
 if __name__ == "__main__":
     main()

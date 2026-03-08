@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package swarm;
+
+// Defines exactly how autonomous UGVs communicate with the central Hive Server.
+service HiveMind {
+  // Bi-directional stream: UGV constantly pushes its local perception,
+  // Hive Mind responds with global updates (where other UGVs are).
+  rpc StreamTelemetry (stream UGVTelemetry) returns (stream HiveUpdate) {}
+}
+
+// ------------------------------------
+// Sent From UGV -> Central Server
+// ------------------------------------
+message UGVTelemetry {
+  string ugv_id = 1;      // Unique UGV identifier (e.g., "Alpha-Rover")
+  float battery_level = 2;
+  
+  // Real-world physical position
+  GPSCoordinate gps = 3;
+  
+  // Compressing the 2D PyTorch Semantic Mask into bytes
+  bytes encoded_semantic_mask = 4;
+  
+  // If LiDAR is active, ship the critical bounding boxes of hazards
+  repeated Hazard 3d_hazards = 5;
+}
+
+message GPSCoordinate {
+  double latitude = 1;
+  double longitude = 2;
+  double elevation_meters = 3;
+  float heading_degrees = 4; // Orientation
+}
+
+message Hazard {
+  string class_name = 1;     // e.g., "Person", "Rock", "Deep Puddle"
+  float distance_meters = 2;
+  float volume_cubic_meters = 3;
+}
+
+// ------------------------------------
+// Sent From Central Server -> UGV
+// ------------------------------------
+message HiveUpdate {
+  string message = 1;
+  
+  // The server tells the UGV the physical locations of friendly units 
+  // so they don't crash into each other or duplicate mapping efforts.
+  repeated FriendlyUnit allies = 2;
+}
+
+message FriendlyUnit {
+  string ugv_id = 1;
+  GPSCoordinate gps = 2;
+}
