@@ -90,8 +90,16 @@ def benchmark_pytorch(model, dummy_input, iterations=100):
 def benchmark_onnx(onnx_file_path, dummy_numpy, iterations=100):
     print(f"--- Loading ONNX Runtime ---")
     
-    # Try GPU if available
-    providers = ['CUDAExecutionProvider', 'CPUExecutionProvider'] if torch.cuda.is_available() else ['CPUExecutionProvider']
+    # Try GPU/TensorRT if available
+    providers = [
+        ('TensorrtExecutionProvider', {
+            'device_id': 0,
+            'trt_max_workspace_size': 2147483648, # 2GB
+            'trt_fp16_enable': True,
+        }),
+        'CUDAExecutionProvider', 
+        'CPUExecutionProvider'
+    ] if torch.cuda.is_available() else ['CPUExecutionProvider']
     try:
         ort_session = ort.InferenceSession(onnx_file_path, providers=providers)
         print(f"Loaded with providers: {ort_session.get_providers()}")

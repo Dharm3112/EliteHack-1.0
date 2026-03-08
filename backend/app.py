@@ -1,11 +1,12 @@
 import os
 import io
 import base64
+from datetime import datetime
 import torch
 import torch.nn.functional as F
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from transformers import SegformerForSemanticSegmentation, SegformerImageProcessor
 from ultralytics import YOLO
@@ -134,6 +135,23 @@ async def predict(file: UploadFile = File(...)):
         align_corners=False
     )
     
+    # ---- ACTIVE EDGE LEARNING: Confidence/Entropy Calculation ----
+    probs = F.softmax(upsampled_logits, dim=1)
+    # Entropy formula: -sum(p * log(p))
+    entropy_map = -torch.sum(probs * torch.log(probs + 1e-8), dim=1).squeeze().cpu().numpy()
+    mean_entropy = float(entropy_map.mean())
+    
+    # If the model is highly uncertain across the image, save it for human review
+    if mean_entropy > 0.8: 
+        review_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'active_learning_review'))
+        os.makedirs(review_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        save_path = os.path.join(review_dir, f"high_entropy_{timestamp}.jpg")
+        
+        # Save the original input image
+        image.save(save_path, format="JPEG")
+        print(f"[Active Learning] High entropy ({mean_entropy:.3f}) detected. Flagged frame saved to {save_path}")
+    
     # Get highest probability class
     pred_mask = upsampled_logits.argmax(dim=1).squeeze().cpu().numpy()
     
@@ -198,6 +216,69 @@ async def predict(file: UploadFile = File(...)):
         "overlay_base64": f"data:image/png;base64,{overlay_b64}",
         "detected_classes": detected_classes
     }
+
+@app.websocket("/ws/stream")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    print("WebSocket connected for Live Video Stream!")
+    try:
+        while True:
+            # Receive base64 frame from frontend
+            data = await websocket.receive_text()
+            
+            # Remove header if exists (e.g. data:image/jpeg;base64,)
+            if "," in data:
+                data = data.split(",")[1]
+                
+            image_data = base64.b64decode(data)
+            image = Image.open(io.BytesIO(image_data)).convert("RGB")
+            original_size = image.size[::-1]
+            
+            # --- SAME LOGIC AS /predict ---
+            inputs = seg_processor(images=image, return_tensors="pt").to(device)
+            with torch.no_grad():
+                outputs = seg_model(**inputs)
+                
+            logits = outputs.logits
+            upsampled_logits = F.interpolate(logits, size=original_size, mode="bilinear", align_corners=False)
+            
+            # Prediction mask
+            pred_mask = upsampled_logits.argmax(dim=1).squeeze().cpu().numpy()
+            color_mask = colorize_mask(pred_mask)
+            color_img = Image.fromarray(color_mask)
+            overlaid_img = Image.blend(image, color_img, alpha=0.5)
+            
+            # YOLO Detections
+            yolo_results = yolo_model(image, verbose=False)
+            draw = ImageDraw.Draw(overlaid_img)
+            
+            for result in yolo_results:
+                for box in result.boxes:
+                    cls_id = int(box.cls[0].item())
+                    if cls_id in DYNAMIC_OBJECTS:
+                        entity_name = DYNAMIC_OBJECTS[cls_id]
+                        x1, y1, x2, y2 = box.xyxy[0].tolist()
+                        draw.rectangle([x1, y1, x2, y2], outline="red", width=3)
+                        draw.rectangle([x1, y1 - 20, x1 + len(entity_name)*8, y1], fill="red")
+                        draw.text((x1 + 2, y1 - 18), entity_name, fill="white")
+                        
+            buffered_overlay = io.BytesIO()
+            overlaid_img.save(buffered_overlay, format="JPEG", quality=70) # Lower quality to keep stream fast
+            overlay_b64 = base64.b64encode(buffered_overlay.getvalue()).decode("utf-8")
+            
+            await websocket.send_json({
+                "status": "success",
+                "overlay_base64": f"data:image/jpeg;base64,{overlay_b64}"
+            })
+            
+    except WebSocketDisconnect:
+        print("WebSocket disconnected")
+    except Exception as e:
+        print(f"WebSocket Error: {e}")
+        try:
+            await websocket.close()
+        except:
+            pass
 
 @app.get("/health")
 def health_check():
