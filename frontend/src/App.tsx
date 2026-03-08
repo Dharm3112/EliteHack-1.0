@@ -47,7 +47,8 @@ function App() {
       wsRef.current = new WebSocket('ws://localhost:8000/ws/stream');
       
       wsRef.current.onopen = () => {
-        streamIntervalRef.current = window.setInterval(captureAndSendFrame, 100); 
+        // Run at ~30 FPS (33ms) now that the backend is blazing fast!
+        streamIntervalRef.current = window.setInterval(captureAndSendFrame, 33); 
       };
 
       wsRef.current.onmessage = (event) => {

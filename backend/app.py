@@ -245,37 +245,11 @@ async def websocket_endpoint(websocket: WebSocket):
                 
             image_data = base64.b64decode(data)
             image = Image.open(io.BytesIO(image_data)).convert("RGB")
-            original_size = image.size[::-1]
             
-            # --- SAME LOGIC AS /predict ---
-            inputs = seg_processor(images=image, return_tensors="pt").to(device)
-            with torch.no_grad():
-                outputs = seg_model(**inputs)
-                
-            logits = outputs.logits
-            upsampled_logits = F.interpolate(logits, size=original_size, mode="bilinear", align_corners=False)
-            
-            # Heatmap computation
-            probs = F.softmax(upsampled_logits, dim=1)
-            entropy_map = -torch.sum(probs * torch.log(probs + 1e-8), dim=1).squeeze().cpu().numpy()
-            max_entropy = np.log(NUM_CLASSES)
-            entropy_norm = (entropy_map / max_entropy * 255).clip(0, 255).astype(np.uint8)
-            heatmap_img_cv = cv2.applyColorMap(entropy_norm, cv2.COLORMAP_JET)
-            heatmap_img_cv = cv2.cvtColor(heatmap_img_cv, cv2.COLOR_BGR2RGB)
-            heatmap_img = Image.fromarray(heatmap_img_cv)
-            buffered_heatmap = io.BytesIO()
-            heatmap_img.save(buffered_heatmap, format="JPEG", quality=70)
-            heatmap_b64 = base64.b64encode(buffered_heatmap.getvalue()).decode("utf-8")
-            
-            # Prediction mask
-            pred_mask = upsampled_logits.argmax(dim=1).squeeze().cpu().numpy()
-            color_mask = colorize_mask(pred_mask)
-            color_img = Image.fromarray(color_mask)
-            overlaid_img = Image.blend(image, color_img, alpha=0.5)
-            
-            # YOLO Detections
-            yolo_results = yolo_model(image, verbose=False)
-            draw = ImageDraw.Draw(overlaid_img)
+            # Remove SegFormer to eliminate latency lag
+            # AR Mode: YOLO Detections only! Blazing fast.
+            yolo_results = yolo_model(image, imgsz=320, verbose=False) # Downscale internal tensor for 30+ FPS speed!
+            draw = ImageDraw.Draw(image)
             
             for result in yolo_results:
                 for box in result.boxes:
@@ -288,13 +262,13 @@ async def websocket_endpoint(websocket: WebSocket):
                         draw.text((x1 + 2, y1 - 18), entity_name, fill="white")
                         
             buffered_overlay = io.BytesIO()
-            overlaid_img.save(buffered_overlay, format="JPEG", quality=70) # Lower quality to keep stream fast
+            image.save(buffered_overlay, format="JPEG", quality=70) # Lower quality to keep stream fast
             overlay_b64 = base64.b64encode(buffered_overlay.getvalue()).decode("utf-8")
             
             await websocket.send_json({
                 "status": "success",
                 "overlay_base64": f"data:image/jpeg;base64,{overlay_b64}",
-                "heatmap_base64": f"data:image/jpeg;base64,{heatmap_b64}"
+                "heatmap_base64": None
             })
             
     except WebSocketDisconnect:
