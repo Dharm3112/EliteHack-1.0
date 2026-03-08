@@ -42,7 +42,7 @@ def run_nightly_retraining():
     # Load current best weights
     best_weights = os.path.join(base_dir, 'models', 'segformer_b0', 'best_segformer.pth')
     if os.path.exists(best_weights):
-        model.load_state_dict(torch.load(best_weights, map_location=device))
+        model.load_state_dict(torch.load(best_weights, map_location=device, weights_only=True))
         
     print("Running 1-Epoch Micro-Finetuning on new data...")
     # ---> Standard PyTorch Training Loop happens here over the new pseudo-labeled Dataset 

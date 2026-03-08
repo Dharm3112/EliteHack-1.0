@@ -375,7 +375,7 @@ function App() {
                     {isLive && (
                       <div className="absolute top-4 right-4 z-50 flex items-center gap-2 bg-black/60 px-3 py-1.5 rounded-pill border border-red-500/30 backdrop-blur-md">
                           <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></div>
-                          <span className="text-white font-bold text-[11px] tracking-widest uppercase">Live Ar</span>
+                          <span className="text-white font-bold text-[11px] tracking-widest uppercase">LIVE AR</span>
                       </div>
                     )}
 

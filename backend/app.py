@@ -1,6 +1,7 @@
 import os
 import io
 import base64
+from contextlib import asynccontextmanager
 from datetime import datetime
 import asyncio
 from typing import Any
@@ -8,13 +9,18 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 import cv2
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from transformers import SegformerForSemanticSegmentation, SegformerImageProcessor
 from ultralytics import YOLO
 
-app = FastAPI(title="Offroad Segmentation API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    load_models()
+    yield
+
+app = FastAPI(title="Offroad Segmentation API", lifespan=lifespan)
 
 # Allow CORS for the frontend
 app.add_middleware(
@@ -117,9 +123,7 @@ def load_models():
     seg_model.to(device)
     seg_model.eval()
 
-@app.on_event("startup")
-async def startup_event():
-    load_models()
+# Startup is handled via the lifespan context manager above
 
 def colorize_mask(mask_numpy):
     h, w = mask_numpy.shape
@@ -264,10 +268,11 @@ def process_video_frame(image_data: bytes) -> str:
     max_w = 320
     if image.width > max_w:
         ratio = max_w / image.width
-        image = image.resize((max_w, int(image.height * ratio)), Image.BILINEAR)
+        image = image.resize((max_w, int(image.height * ratio)), Image.Resampling.BILINEAR)
     
     # YOLO at 160px resolution with half-precision for maximum speed
-    yolo_results = yolo_model(image, imgsz=160, half=True, verbose=False) 
+    use_half = device.type == 'cuda'
+    yolo_results = yolo_model(image, imgsz=160, half=use_half, verbose=False) 
     
     # Only draw if there are actual detections — skip PIL overhead otherwise
     has_detections = False
@@ -329,7 +334,7 @@ async def websocket_endpoint(websocket: WebSocket):
         print(f"WebSocket Error: {e}")
         try:
             await websocket.close()
-        except:
+        except Exception:
             pass
 
 

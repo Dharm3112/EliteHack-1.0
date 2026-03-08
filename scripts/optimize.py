@@ -115,7 +115,7 @@ def optimize_pipeline():
     )
     
     if os.path.exists(model_path):
-        model.load_state_dict(torch.load(model_path, map_location='cpu'))
+        model.load_state_dict(torch.load(model_path, map_location='cpu', weights_only=True))
         print(f"Loaded trained Weights from {model_path}")
     else:
         print("WARNING: 'best_segformer.pth' not found. Profiling untrained mit-b0 architecture.")
