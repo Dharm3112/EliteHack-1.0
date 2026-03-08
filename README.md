@@ -63,33 +63,33 @@ ProTechTerrain is an end-to-end perception engine that fuses a **SegFormer Trans
 │                     ProTechTerrain System                       │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  ┌───────────────┐     WebSocket /ws/stream     ┌────────────┐ │
-│  │  React 19 UI  │◄════════════════════════════►│  FastAPI    │ │
-│  │  (Vite 7)     │     POST /predict            │  Backend   │ │
-│  │               │─────────────────────────────►│            │ │
-│  │  • AR Overlay │     GET /health              │  • CORS    │ │
-│  │  • Heatmaps   │─────────────────────────────►│  • CUDA    │ │
-│  │  • Latency    │                              │            │ │
-│  └───────────────┘                              └─────┬──────┘ │
-│                                                       │        │
-│                              ┌────────────────────────┤        │
-│                              ▼                        ▼        │
-│                     ┌──────────────┐        ┌──────────────┐   │
-│                     │  SegFormer   │        │   YOLOv8n    │   │
-│                     │  (mit-b0)    │        │   (COCO-80)  │   │
-│                     │              │        │              │   │
-│                     │ 10 Terrain   │        │ Dynamic      │   │
-│                     │ Classes      │        │ Hazards      │   │
-│                     └──────────────┘        └──────────────┘   │
-│                              │                        │        │
-│                              ▼                        ▼        │
-│                     ┌──────────────────────────────────┐       │
+│  ┌───────────────┐     WebSocket /ws/stream     ┌────────────┐  │
+│  │  React 19 UI  │◄════════════════════════════►│  FastAPI   │  │
+│  │  (Vite 7)     │     POST /predict            │  Backend   │  │
+│  │               │─────────────────────────────►│            │  │
+│  │  • AR Overlay │     GET /health              │  • CORS    │  │
+│  │  • Heatmaps   │─────────────────────────────►│  • CUDA    │  │
+│  │  • Latency    │                              │            │  │
+│  └───────────────┘                              └─────┬──────┘  │
+│                                                       │         │
+│                              ┌────────────────────────┤         │
+│                              ▼                        ▼         │
+│                     ┌──────────────┐        ┌──────────────┐    │
+│                     │  SegFormer   │        │   YOLOv8n    │    │
+│                     │  (mit-b0)    │        │   (COCO-80)  │    │
+│                     │              │        │              │    │
+│                     │ 10 Terrain   │        │ Dynamic      │    │
+│                     │ Classes      │        │ Hazards      │    │
+│                     └──────────────┘        └──────────────┘    │
+│                              │                        │         │
+│                              ▼                        ▼         │
+│                     ┌──────────────────────────────────┐        │
 │                     │       Fused Perception Output     │       │
 │                     │  • Colorized segmentation mask    │       │
 │                     │  • Bounding boxes + labels        │       │
 │                     │  • Entropy heatmap                │       │
 │                     │  • Active Learning flags          │       │
-│                     └──────────────────────────────────┘       │
+│                     └──────────────────────────────────┘        │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
