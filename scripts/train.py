@@ -1,24 +1,26 @@
 import os
 import sys
-import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader
-from transformers import SegformerForSemanticSegmentation, get_cosine_schedule_with_warmup
-from tqdm import tqdm
 import time
 import numpy as np
 from PIL import Image
+from tqdm import tqdm
 
-# Adjust path to find utils
+# Core PyTorch Imports
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader, Dataset
+from transformers import SegformerForSemanticSegmentation, get_cosine_schedule_with_warmup
+
+# Adjust path to dynamically load sibling folders
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from utils.dataloader import OffroadDataset, CLASS_NAMES
-from utils.augmentations import get_training_augmentation, get_validation_augmentation
-from utils.losses import FocalLoss, get_weighted_ce_loss
+
+# Custom User Modules (Type Ignore suppresses IDE 'Red Line' warnings since path is appended dynamically)
+from utils.dataloader import OffroadDataset, CLASS_NAMES  # type: ignore
+from utils.augmentations import get_training_augmentation, get_validation_augmentation  # type: ignore
+from utils.losses import FocalLoss, get_weighted_ce_loss  # type: ignore
 
 # Metrics from earlier script
-from Dataset.Offroad_Segmentation_Scripts.train_segmentation import compute_iou, compute_dice, compute_pixel_accuracy, save_training_plots, save_history_to_file
-
-from torch.utils.data import Dataset
+from Dataset.Offroad_Segmentation_Scripts.train_segmentation import compute_iou, compute_dice, compute_pixel_accuracy, save_training_plots, save_history_to_file  # type: ignore
 
 class SyntheticDesertDataset(Dataset):
     """
@@ -55,7 +57,11 @@ def main():
     USE_FOCAL_LOSS = True  # Set to False to use Weighted CE
     # Weights calculated from EDA (data/class_distribution.csv)
     # Background, Trees, Lush Bushes, Dry Grass, Dry Bushes, Ground Clutter, Logs, Rocks, Landscape, Sky
-    CLASS_WEIGHTS = [3.56, 2.83, 1.68, 0.53, 9.10, 2.27, 128.34, 8.35, 0.41, 0.26]
+    
+    # 🌲 PHASE 5 TUNING FIX: The Confusion Matrix proved the mit-b0 architecture critically fails on 'Trees'.
+    # We are aggressively boosting the 'Trees' weight from 2.83 -> 15.00 to force the Kaiming He Focal Loss 
+    # to brutally penalize the AdamW optimizer if it misses foliage shapes.
+    CLASS_WEIGHTS = [3.56, 15.00, 1.68, 0.53, 9.10, 2.27, 128.34, 8.35, 0.41, 0.26]
 
     # Directories
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
