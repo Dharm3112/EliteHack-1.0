@@ -35,5 +35,13 @@ This script will instantly:
 3. Simulate a UGV camera intercept tensor.
 4. Output a high-contrast `matplotlib` RGB image overlay directly into `data/eval_visuals/prediction_overlay.png` proving that the model can differentiate physical hazards from the ground truth.
 
-## 6. Future Work
-Our next evolution involves migrating this finalized ONNX engine onto embedded NVIDIA Jetson edge-hardware. We plan to integrate `TensorRT` execution providers for real-time video stream inferences.
+## 6. Envisioning Future Work (Phase 7)
+While the `mit-b0` SegFormer model demonstrates exceptional geometry extraction in our tests, deploying it to a physical rover introduces two major challenges that we plan to conquer in the next iteration:
+
+### A. Bridging the "Sim-to-Real" Gap (Domain Adaptation)
+Deploying models trained purely on rigid synthetic datasets into the chaotic physical world is dangerous due to hardware distortions (lens glare, sensor noise, motion blur). 
+- **The Proposal:** We plan to implement **CycleGAN** (Generative Adversarial Networks) architectures to act as a mathematical filter between simulation and reality. We will feed CycleGAN thousands of clean synthetic labels and chaotic real-world desert dashcam videos, forcing the Generator to automatically translate the clean simulation data into photorealistic, noisy training footage. This completely shatters the Sim-to-Real deployment gap without requiring expensive human re-labeling.
+
+### B. Unsupervised Geometry Extraction (Self-Supervised Learning)
+Labeling segmentation polygons across millions of real-world rocks and bushes is financially impossible. Capturing 40 hours of 4K video from a GoPro mounted to an ATV, however, is practically free.
+- **The Proposal:** We will utilize **Masked Image Modeling** (similar to BEiT or MAE) on massive troves of unstructured, unlabeled desert footage. By mathematically blacking out 50% of the video frames, we will force the SegFormer architecture to predict the missing pixels. This forces the transformer to natively learn the complex visual structures of desert environments purely unsupervised, before we ever fine-tune it on the tiny, expensive supervised `data/` structure.
