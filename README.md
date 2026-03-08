@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white" />
 </p>
 
-# 🛡️ ProTechTerrain — AI-Powered Off-Road Autonomous Perception
+# 🛡️ ProTechTerrain AI-Powered Off-Road Autonomous Perception
 
 > **Real-time semantic segmentation + dynamic hazard detection for Unmanned Ground Vehicles (UGVs) operating in unstructured desert terrain.**
 
@@ -542,5 +542,5 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 
 <p align="center">
   <b>Built with ❤️ for Elite Hack 1.0</b><br>
-  <sub>ProTechTerrain — Because every pixel matters when the terrain fights back.</sub>
+  <sub>ProTechTerrain Because every pixel matters when the terrain fights back.</sub>
 </p>
