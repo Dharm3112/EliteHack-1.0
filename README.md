@@ -209,9 +209,6 @@ EliteHack-1.0/
 ├── pyrightconfig.json                    # Python type checker config
 ├── yolov8n.pt                            # YOLOv8 nano weights (~6.5 MB)
 ├── LICENSE                               # MIT License
-├── WORKFLOW.md                           # Detailed 7-phase development workflow
-├── TODO.md                               # Project roadmap & completion tracking
-├── ProbsSol.md                           # Problem statement & strategy analysis
 ├── .gitignore                            # Git ignore rules
 └── README.md                             # ← You are here
 ```
