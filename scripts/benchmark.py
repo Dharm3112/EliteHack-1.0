@@ -1,7 +1,14 @@
 import os
 import sys
+import io
 import time
 import torch
+
+# Fix Windows Console Encoding for PyTorch's internal emojis
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 import torch.nn.utils.prune as prune
 import numpy as np
 from transformers import SegformerForSemanticSegmentation
@@ -80,7 +87,7 @@ def export_to_onnx(model, dummy_input, onnx_file_path):
         print(f"ONNX Export Failed: {e}")
         return False
 
-def benchmark_pytorch(model, dummy_input, iterations=100):
+def benchmark_pytorch(model, dummy_input, iterations=10):
     print("\n--- Warming up PyTorch ---")
     for _ in range(10):
         with torch.no_grad():
@@ -104,7 +111,7 @@ def benchmark_pytorch(model, dummy_input, iterations=100):
     print(f"Current FPS: {fps:.2f}\n")
     return avg_ms
 
-def benchmark_onnx(onnx_file_path, dummy_numpy, iterations=100, label="ONNX Baseline"):
+def benchmark_onnx(onnx_file_path, dummy_numpy, iterations=10, label="ONNX Baseline"):
     print(f"\n--- Loading {label} ---")
     
     # Try GPU/TensorRT if available

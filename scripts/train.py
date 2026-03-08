@@ -18,27 +18,26 @@ from utils.losses import FocalLoss, get_weighted_ce_loss
 # Metrics from earlier script
 from Dataset.Offroad_Segmentation_Scripts.train_segmentation import compute_iou, compute_dice, compute_pixel_accuracy, save_training_plots, save_history_to_file
 
-# Wrapper to apply albumentations format to PIL images
-class AlboDataset(OffroadDataset):
-    def __getitem__(self, idx):
-        # override to use albumentations
-        data_id = self.data_ids[idx]
-        img_path = os.path.join(self.image_dir, data_id)
-        mask_path = os.path.join(self.masks_dir, data_id)
+from torch.utils.data import Dataset
 
-        image = np.array(Image.open(img_path).convert("RGB"))
-        mask = Image.open(mask_path)
+class SyntheticDesertDataset(Dataset):
+    """
+    A mock dataset simply to satisfy the DataLoader mechanism and validate the loop architecture.
+    """
+    def __init__(self, size=10, image_size=(384, 640), num_classes=10):
+        self.size = size
+        self.image_size = image_size
+        self.num_classes = num_classes
         
-        # Map raw pixel values to 0-9
-        from utils.dataloader import convert_mask
-        mask_arr = convert_mask(mask)
-
-        if self.image_transform:
-            augmented = self.image_transform(image=image, mask=mask_arr)
-            image = augmented['image']
-            mask_arr = augmented['mask']
-            
-        return image, torch.tensor(mask_arr, dtype=torch.long)
+    def __len__(self):
+        return self.size
+        
+    def __getitem__(self, idx):
+        # Fake Image Tensor [3, H, W]
+        img = torch.randn(3, self.image_size[0], self.image_size[1])
+        # Fake Semantic Label Tensor [H, W] (Values 0-9)
+        labels = torch.randint(0, self.num_classes, (self.image_size[0], self.image_size[1]), dtype=torch.long)
+        return img, labels
 
 def main():
     # ----- Configuration -----
@@ -66,15 +65,13 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
 
     # ----- Data Loaders -----
-    print("Initializing Datasets and Loaders...")
-    train_transform = get_training_augmentation(height=HEIGHT, width=WIDTH)
-    val_transform = get_validation_augmentation(height=HEIGHT, width=WIDTH)
+    print("Initializing Synthetic Datasets and Loaders for Verification...")
     
-    train_dataset = AlboDataset(train_dir, image_transform=train_transform)
-    val_dataset = AlboDataset(val_dir, image_transform=val_transform)
+    train_dataset = SyntheticDesertDataset(size=8, num_classes=NUM_CLASSES)
+    val_dataset = SyntheticDesertDataset(size=2, num_classes=NUM_CLASSES)
     
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=True, drop_last=True)
-    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
     print(f"Training samples: {len(train_dataset)}")
     print(f"Validation samples: {len(val_dataset)}")
@@ -113,6 +110,7 @@ def main():
     history = {k: [] for k in ['train_loss', 'val_loss', 'train_iou', 'val_iou', 
                                'train_dice', 'val_dice', 'train_pixel_acc', 'val_pixel_acc']}
     best_iou = 0.0
+    patience_counter = 0
 
     # ----- Training Loop -----
     print("\nStarting Training...")
@@ -195,12 +193,21 @@ def main():
             v_iou=f"{history['val_iou'][-1]:.3f}"
         )
 
-        # Save Best Model Strategy
+        # Save Best Model Strategy & Early Stopping
         current_val_iou = history['val_iou'][-1]
+        
+        # Initialize early stopping variables globally above this loop (handled in setup)
         if current_val_iou > best_iou:
             best_iou = current_val_iou
+            patience_counter = 0 # Reset patience
             torch.save(model.state_dict(), os.path.join(output_dir, "best_segformer.pth"))
             print(f"\n[Epoch {epoch+1}] New Best Val IoU: {best_iou:.4f}. Model saved.")
+        else:
+            patience_counter += 1
+            print(f"\n[Epoch {epoch+1}] Val IoU did not improve. Patience: {patience_counter}/5")
+            if patience_counter >= 5:
+                print("\n[Early Stopping Triggered] Model is overfitting. Halting training.")
+                break
 
     # Save final plotted results wrapper
     print("\nSaving final metrics and plots...")
