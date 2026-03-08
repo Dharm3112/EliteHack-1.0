@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import type { ChangeEvent, DragEvent } from 'react';
 import { motion, AnimatePresence, type Transition } from 'framer-motion';
 import { 
-  Plus, Type, Square, Image as ImageIcon, Layout, 
+  Plus, Type, Square, Image as ImageIcon, Layout, Box,
   Menu, Play, Square as SquareIcon, Eye, Zap, 
   ChevronDown, Upload, Crosshair, Map, Activity, Layers
 } from 'lucide-react';
@@ -15,10 +15,11 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [resultMask, setResultMask] = useState<string | null>(null);
   const [resultOverlay, setResultOverlay] = useState<string | null>(null);
+  const [resultBbox, setResultBbox] = useState<string | null>(null);
   const [resultHeatmap, setResultHeatmap] = useState<string | null>(null);
   const [detectedClasses, setDetectedClasses] = useState<{ id: number, name: string, color: string }[]>([]);
 
-  const [viewMode, setViewMode] = useState<'original' | 'mask' | 'overlay' | 'heatmap'>('overlay');
+  const [viewMode, setViewMode] = useState<'original' | 'mask' | 'overlay' | 'heatmap' | 'bbox'>('overlay');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- WebSocket & Live Video State ---
@@ -122,6 +123,7 @@ function App() {
     setImagePreview(URL.createObjectURL(file));
     setResultMask(null);
     setResultOverlay(null);
+    setResultBbox(null);
     setResultHeatmap(null);
     setDetectedClasses([]);
   };
@@ -145,6 +147,7 @@ function App() {
       const data = await response.json();
       setResultMask(data.mask_base64);
       setResultOverlay(data.overlay_base64);
+      setResultBbox(data.bbox_base64);
       setResultHeatmap(data.heatmap_base64);
       setDetectedClasses(data.detected_classes);
       setViewMode('overlay');
@@ -174,12 +177,8 @@ function App() {
                 <path d="M0 20L20 0H40L20 20H40L20 40H0L20 20H0Z" fill="white"/>
             </svg>
           </div>
-          <nav className="hidden lg:flex items-center gap-6 text-[13px] font-medium text-framer-muted">
-             <span className="text-framer-text cursor-pointer hover:opacity-80 transition-opacity">Product</span>
-             <span className="cursor-pointer hover:text-framer-text transition-colors">Teams</span>
-             <span className="cursor-pointer hover:text-framer-text transition-colors">Resources</span>
-             <span className="cursor-pointer hover:text-framer-text transition-colors">Community</span>
-             <span className="cursor-pointer hover:text-framer-text transition-colors">Support</span>
+         <nav className="hidden lg:flex items-center gap-6 text-[15px] font-bold tracking-tight text-white border border-white/20 px-3 py-1 rounded-full bg-white/5 shadow-inner">
+             <span>ProTechTerrain</span>
           </nav>
         </div>
         
@@ -363,6 +362,9 @@ function App() {
                       {viewMode === 'overlay' && resultOverlay && (
                         <motion.img initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} src={resultOverlay} className="w-full h-full object-contain" alt="Overlaid Mask" />
                       )}
+                      {viewMode === 'bbox' && resultBbox && (
+                        <motion.img initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} src={resultBbox} className="w-full h-full object-contain" alt="Object Detections" />
+                      )}
                       {viewMode === 'heatmap' && resultHeatmap && (
                         <motion.img initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} src={resultHeatmap} className="w-full h-full object-contain mix-blend-screen" alt="Thermal Heatmap" />
                       )}
@@ -388,12 +390,13 @@ function App() {
                    { id: 'original', label: 'Original Telemetry', icon: <ImageIcon size={14}/> },
                    { id: 'mask', label: 'Semantic Geometry', icon: <Layers size={14}/> },
                    { id: 'overlay', label: 'Fused AR Overlay', icon: <Layout size={14}/> },
+                   { id: 'bbox', label: 'Hazard Detections (YOLO)', icon: <Box size={14}/> },
                    { id: 'heatmap', label: 'LiDAR Confidence', icon: <Map size={14}/> }
                  ].map(mode => (
                    <button
                      key={mode.id}
                      onClick={() => setViewMode(mode.id as any)}
-                     disabled={(mode.id === 'mask' && !resultMask) || (mode.id === 'overlay' && !resultOverlay) || (mode.id === 'heatmap' && !resultHeatmap)}
+                     disabled={(mode.id === 'mask' && !resultMask) || (mode.id === 'overlay' && !resultOverlay) || (mode.id === 'bbox' && !resultBbox) || (mode.id === 'heatmap' && !resultHeatmap)}
                      className="relative flex items-center justify-between w-full p-2 h-[32px] rounded-[6px] text-[13px] group text-left transition-all overflow-hidden"
                    >
                      {/* Background Selection Layer */}

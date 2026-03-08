@@ -2,6 +2,7 @@ import os
 import io
 import base64
 from datetime import datetime
+import asyncio
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -60,19 +61,30 @@ DYNAMIC_OBJECTS = {
     21: "Elephant",
     22: "Bear",
     23: "Zebra",
-    24: "Giraffe"
+    24: "Giraffe",
+    # Add these missing everyday objects:
+    39: "Bottle",
+    41: "Cup",
+    63: "Laptop",
+    67: "Cell Phone",
+    73: "Book"
 }
-
 # Global models
 seg_model = None
 seg_processor = None
 yolo_model = None
 
 def load_models():
-    global seg_model, seg_processor, yolo_model
-    
+    global seg_model, seg_processor, yolo_model, DYNAMIC_OBJECTS
+
     print("Loading YOLOv8 (Dynamic Object Detection)...")
     yolo_model = YOLO('yolov8n.pt') 
+    yolo_model.to(device) # Force YOLO to use GPU if available
+    
+    # Dynamically map all 80 available COCO classes to our tracked dictionary!
+    if hasattr(yolo_model, 'names'):
+        for k, v in yolo_model.names.items():
+            DYNAMIC_OBJECTS[k] = str(v).title()
 
     print("Loading SegFormer processor...")
     seg_processor = SegformerImageProcessor.from_pretrained("nvidia/mit-b0")
@@ -171,15 +183,18 @@ async def predict(file: UploadFile = File(...)):
     color_mask = colorize_mask(pred_mask)
     color_img = Image.fromarray(color_mask)
     
-    # Create an overlaid version (50% blend)
+    # Create an overlaid version (50% blend) - Pure SegFormer
     overlaid_img = Image.blend(image, color_img, alpha=0.5)
     
     # ---- 2. DYNAMIC HAZARDS (YOLOv8) ----
+    # Create a separate image just for YOLO Bounding Boxes
+    bbox_img = image.copy()
+    
     # Run YOLO inference
     yolo_results = yolo_model(image)
     
-    # Setup drawing context on the overlay image
-    draw = ImageDraw.Draw(overlaid_img)
+    # Setup drawing context on the separate bbox image
+    draw = ImageDraw.Draw(bbox_img)
     dynamic_classes_found = set()
     
     # Process YOLO detections
@@ -210,6 +225,10 @@ async def predict(file: UploadFile = File(...)):
     overlaid_img.save(buffered_overlay, format="PNG")
     overlay_b64 = base64.b64encode(buffered_overlay.getvalue()).decode("utf-8")
     
+    buffered_bbox = io.BytesIO()
+    bbox_img.save(buffered_bbox, format="PNG")
+    bbox_b64 = base64.b64encode(buffered_bbox.getvalue()).decode("utf-8")
+    
     # Get unique classes present in the Segmentation prediction
     unique_classes = np.unique(pred_mask)
     detected_classes = [{"id": int(c), "name": CLASS_NAMES[int(c)], "color": f"rgb({COLOR_MAP[int(c)][0]}, {COLOR_MAP[int(c)][1]}, {COLOR_MAP[int(c)][2]})"} for c in unique_classes]
@@ -226,9 +245,32 @@ async def predict(file: UploadFile = File(...)):
         "status": "success",
         "mask_base64": f"data:image/png;base64,{mask_b64}",
         "overlay_base64": f"data:image/png;base64,{overlay_b64}",
+        "bbox_base64": f"data:image/png;base64,{bbox_b64}",
         "heatmap_base64": f"data:image/png;base64,{heatmap_b64}",
         "detected_classes": detected_classes
     }
+
+def process_video_frame(image_data):
+    image = Image.open(io.BytesIO(image_data)).convert("RGB")
+    
+    # 1. Slash YOLO resolution (160) and use half-precision for speed
+    yolo_results = yolo_model(image, imgsz=160, half=True, verbose=False) 
+    
+    draw = ImageDraw.Draw(image)
+    for result in yolo_results:
+        for box in result.boxes:
+            cls_id = int(box.cls[0].item())
+            if cls_id in DYNAMIC_OBJECTS:
+                entity_name = DYNAMIC_OBJECTS[cls_id]
+                x1, y1, x2, y2 = box.xyxy[0].tolist()
+                # 2. Simplified drawing (removed the solid background rectangle to save MS)
+                draw.rectangle([x1, y1, x2, y2], outline="red", width=2)
+                draw.text((x1, y1 - 12), entity_name, fill="red")
+                
+    buffered_overlay = io.BytesIO()
+    # 3. Drop JPEG quality to 30 and disable optimization for instant encoding
+    image.save(buffered_overlay, format="JPEG", quality=30, optimize=False) 
+    return base64.b64encode(buffered_overlay.getvalue()).decode("utf-8")
 
 @app.websocket("/ws/stream")
 async def websocket_endpoint(websocket: WebSocket):
@@ -236,34 +278,15 @@ async def websocket_endpoint(websocket: WebSocket):
     print("WebSocket connected for Live Video Stream!")
     try:
         while True:
-            # Receive base64 frame from frontend
             data = await websocket.receive_text()
             
-            # Remove header if exists (e.g. data:image/jpeg;base64,)
             if "," in data:
                 data = data.split(",")[1]
                 
             image_data = base64.b64decode(data)
-            image = Image.open(io.BytesIO(image_data)).convert("RGB")
             
-            # Remove SegFormer to eliminate latency lag
-            # AR Mode: YOLO Detections only! Blazing fast.
-            yolo_results = yolo_model(image, imgsz=320, verbose=False) # Downscale internal tensor for 30+ FPS speed!
-            draw = ImageDraw.Draw(image)
-            
-            for result in yolo_results:
-                for box in result.boxes:
-                    cls_id = int(box.cls[0].item())
-                    if cls_id in DYNAMIC_OBJECTS:
-                        entity_name = DYNAMIC_OBJECTS[cls_id]
-                        x1, y1, x2, y2 = box.xyxy[0].tolist()
-                        draw.rectangle([x1, y1, x2, y2], outline="red", width=3)
-                        draw.rectangle([x1, y1 - 20, x1 + len(entity_name)*8, y1], fill="red")
-                        draw.text((x1 + 2, y1 - 18), entity_name, fill="white")
-                        
-            buffered_overlay = io.BytesIO()
-            image.save(buffered_overlay, format="JPEG", quality=70) # Lower quality to keep stream fast
-            overlay_b64 = base64.b64encode(buffered_overlay.getvalue()).decode("utf-8")
+            # Offload heavy ML and PIL tasks to a thread to prevent blocking
+            overlay_b64 = await asyncio.to_thread(process_video_frame, image_data)
             
             await websocket.send_json({
                 "status": "success",
@@ -279,6 +302,7 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.close()
         except:
             pass
+
 
 @app.get("/health")
 def health_check():
