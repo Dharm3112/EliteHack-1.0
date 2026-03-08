@@ -1,4 +1,5 @@
-import { useState, useRef, ChangeEvent, DragEvent, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import type { ChangeEvent, DragEvent } from 'react';
 
 function App() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -7,9 +8,10 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [resultMask, setResultMask] = useState<string | null>(null);
   const [resultOverlay, setResultOverlay] = useState<string | null>(null);
+  const [resultHeatmap, setResultHeatmap] = useState<string | null>(null);
   const [detectedClasses, setDetectedClasses] = useState<{ id: number, name: string, color: string }[]>([]);
 
-  const [viewMode, setViewMode] = useState<'original' | 'mask' | 'overlay'>('overlay');
+  const [viewMode, setViewMode] = useState<'original' | 'mask' | 'overlay' | 'heatmap'>('overlay');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- WebSocket & Live Video State ---
@@ -49,6 +51,7 @@ function App() {
         const data = JSON.parse(event.data);
         if (data.status === 'success') {
           setResultOverlay(data.overlay_base64);
+          if (data.heatmap_base64) setResultHeatmap(data.heatmap_base64);
         }
       };
 
@@ -72,6 +75,7 @@ function App() {
     }
     setIsLive(false);
     setResultOverlay(null);
+    setResultHeatmap(null);
   };
 
   const captureAndSendFrame = () => {
@@ -116,6 +120,7 @@ function App() {
     setImagePreview(URL.createObjectURL(file));
     setResultMask(null);
     setResultOverlay(null);
+    setResultHeatmap(null);
     setDetectedClasses([]);
   };
 
@@ -138,6 +143,7 @@ function App() {
       const data = await response.json();
       setResultMask(data.mask_base64);
       setResultOverlay(data.overlay_base64);
+      setResultHeatmap(data.heatmap_base64);
       setDetectedClasses(data.detected_classes);
       setViewMode('overlay');
     } catch (error) {
@@ -267,6 +273,13 @@ function App() {
                 >
                   Overlay (50%)
                 </button>
+                <button
+                  onClick={() => setViewMode('heatmap')}
+                  disabled={!resultHeatmap}
+                  className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${!resultHeatmap ? 'opacity-50 cursor-not-allowed' : ''} ${viewMode === 'heatmap' ? 'bg-secondary-DEFAULT text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-dark-surface'}`}
+                >
+                  Confidence Heatmap
+                </button>
               </div>
             </div>
 
@@ -304,6 +317,9 @@ function App() {
                   {/* Both live video and static overlay use this */}
                   {viewMode === 'overlay' && resultOverlay && (
                     <img src={resultOverlay} className="max-w-full max-h-full object-contain drop-shadow-2xl rounded-lg" alt="Overlaid Mask" />
+                  )}
+                  {viewMode === 'heatmap' && resultHeatmap && (
+                    <img src={resultHeatmap} className="max-w-full max-h-full object-contain drop-shadow-2xl rounded-lg" alt="Thermal Heatmap" />
                   )}
                 </div>
               )}

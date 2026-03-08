@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  # The AI Inference Server
+  api:
+    build:
+      context: . # Build context is root to allow access to ./models
+      dockerfile: backend/Dockerfile
+    container_name: protechterrain-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models # Mount locally trained models directly into the running container
+      - ./data:/app/data     # Persist the Active Learning snapshots safely on the host
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  # The React Web Dashboard
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: protechterrain-ui
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    restart: unless-stopped

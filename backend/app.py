@@ -5,6 +5,7 @@ from datetime import datetime
 import torch
 import torch.nn.functional as F
 import numpy as np
+import cv2
 from PIL import Image, ImageDraw, ImageFont
 from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -141,6 +142,17 @@ async def predict(file: UploadFile = File(...)):
     entropy_map = -torch.sum(probs * torch.log(probs + 1e-8), dim=1).squeeze().cpu().numpy()
     mean_entropy = float(entropy_map.mean())
     
+    # Calculate Heatmap
+    max_entropy = np.log(NUM_CLASSES)
+    entropy_norm = (entropy_map / max_entropy * 255).clip(0, 255).astype(np.uint8)
+    heatmap_img_cv = cv2.applyColorMap(entropy_norm, cv2.COLORMAP_JET)
+    heatmap_img_cv = cv2.cvtColor(heatmap_img_cv, cv2.COLOR_BGR2RGB)
+    heatmap_img = Image.fromarray(heatmap_img_cv)
+    
+    buffered_heatmap = io.BytesIO()
+    heatmap_img.save(buffered_heatmap, format="PNG")
+    heatmap_b64 = base64.b64encode(buffered_heatmap.getvalue()).decode("utf-8")
+    
     # If the model is highly uncertain across the image, save it for human review
     if mean_entropy > 0.8: 
         review_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'active_learning_review'))
@@ -214,6 +226,7 @@ async def predict(file: UploadFile = File(...)):
         "status": "success",
         "mask_base64": f"data:image/png;base64,{mask_b64}",
         "overlay_base64": f"data:image/png;base64,{overlay_b64}",
+        "heatmap_base64": f"data:image/png;base64,{heatmap_b64}",
         "detected_classes": detected_classes
     }
 
@@ -242,6 +255,18 @@ async def websocket_endpoint(websocket: WebSocket):
             logits = outputs.logits
             upsampled_logits = F.interpolate(logits, size=original_size, mode="bilinear", align_corners=False)
             
+            # Heatmap computation
+            probs = F.softmax(upsampled_logits, dim=1)
+            entropy_map = -torch.sum(probs * torch.log(probs + 1e-8), dim=1).squeeze().cpu().numpy()
+            max_entropy = np.log(NUM_CLASSES)
+            entropy_norm = (entropy_map / max_entropy * 255).clip(0, 255).astype(np.uint8)
+            heatmap_img_cv = cv2.applyColorMap(entropy_norm, cv2.COLORMAP_JET)
+            heatmap_img_cv = cv2.cvtColor(heatmap_img_cv, cv2.COLOR_BGR2RGB)
+            heatmap_img = Image.fromarray(heatmap_img_cv)
+            buffered_heatmap = io.BytesIO()
+            heatmap_img.save(buffered_heatmap, format="JPEG", quality=70)
+            heatmap_b64 = base64.b64encode(buffered_heatmap.getvalue()).decode("utf-8")
+            
             # Prediction mask
             pred_mask = upsampled_logits.argmax(dim=1).squeeze().cpu().numpy()
             color_mask = colorize_mask(pred_mask)
@@ -268,7 +293,8 @@ async def websocket_endpoint(websocket: WebSocket):
             
             await websocket.send_json({
                 "status": "success",
-                "overlay_base64": f"data:image/jpeg;base64,{overlay_b64}"
+                "overlay_base64": f"data:image/jpeg;base64,{overlay_b64}",
+                "heatmap_base64": f"data:image/jpeg;base64,{heatmap_b64}"
             })
             
     except WebSocketDisconnect:
