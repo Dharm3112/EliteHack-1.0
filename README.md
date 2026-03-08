@@ -131,54 +131,89 @@ ProTechTerrain is an end-to-end perception engine that fuses a **SegFormer Trans
 
 ```
 EliteHack-1.0/
-├── backend/
-│   ├── app.py                  # FastAPI server: REST + WebSocket endpoints
-│   └── Dockerfile              # Backend container definition
 │
-├── frontend/
-│   ├── src/
-│   │   ├── App.tsx             # Main React component (camera, upload, AR overlay)
-│   │   ├── App.css             # Component styles
-│   │   ├── index.css           # Global styles & design tokens
-│   │   └── main.tsx            # App entry point
-│   ├── package.json            # Dependencies (React 19, Vite 7, Framer Motion)
-│   └── Dockerfile              # Frontend container (Nginx static serve)
+├── backend/                              # AI Inference Server
+│   ├── app.py                            # FastAPI server: REST + WebSocket endpoints
+│   ├── Dockerfile                        # Backend container definition
+│   ├── yolov8n.pt                        # YOLOv8 nano weights (auto-downloaded)
+│   ├── network/
+│   │   └── grpc_swarm/
+│   │       └── swarm.proto               # Protobuf schema for multi-agent swarm comms
+│   └── sensors/
+│       └── lidar_fusion.py               # LiDAR 3D point-cloud fusion module
 │
-├── scripts/
-│   ├── train.py                # SegFormer training loop (Focal Loss, LR scheduler)
-│   ├── evaluate.py             # 10×10 confusion matrix + per-class mIoU
-│   ├── benchmark.py            # Inference speed profiling engine
-│   ├── optimize.py             # L1 pruning + ONNX INT8 quantization export
-│   ├── eda.py                  # Exploratory data analysis (class pixel distribution)
-│   ├── nightly_retrain.py      # Automated Active Learning retraining pipeline
-│   └── test_augmentation.py    # Augmentation preview & validation
+├── frontend/                             # React 19 Dashboard
+│   ├── index.html                        # HTML entry point (SEO meta tags)
+│   ├── package.json                      # Dependencies (React 19, Vite 7, Framer Motion)
+│   ├── vite.config.ts                    # Vite build configuration
+│   ├── tailwind.config.js                # Tailwind CSS theme config
+│   ├── postcss.config.js                 # PostCSS plugins
+│   ├── tsconfig.json                     # TypeScript project references
+│   ├── tsconfig.app.json                 # App-level TypeScript config
+│   ├── tsconfig.node.json                # Node-level TypeScript config
+│   ├── eslint.config.js                  # ESLint rules
+│   ├── Dockerfile                        # Frontend container (Nginx static serve)
+│   ├── public/
+│   │   └── vite.svg                      # Favicon
+│   └── src/
+│       ├── App.tsx                       # Main React component (camera, upload, AR overlay)
+│       ├── App.css                       # Component styles
+│       ├── index.css                     # Global styles & design tokens
+│       ├── main.tsx                      # App entry point
+│       └── assets/
+│           └── react.svg                 # React logo asset
 │
-├── utils/
-│   ├── augmentations.py        # Albumentations pipeline (dust, glare, occlusion)
-│   ├── dataloader.py           # Custom PyTorch Dataset for off-road masks
-│   └── losses.py               # Focal Loss implementation with per-class alpha
+├── scripts/                              # Automation & ML Pipeline
+│   ├── train.py                          # SegFormer training loop (Focal Loss, LR scheduler)
+│   ├── evaluate.py                       # 10×10 confusion matrix + per-class mIoU
+│   ├── benchmark.py                      # Inference speed profiling engine
+│   ├── optimize.py                       # L1 pruning + ONNX INT8 quantization export
+│   ├── eda.py                            # Exploratory data analysis (class pixel distribution)
+│   ├── nightly_retrain.py                # Automated Active Learning retraining pipeline
+│   └── test_augmentation.py              # Augmentation preview & validation
 │
-├── models/
+├── utils/                                # Shared Python Utilities
+│   ├── augmentations.py                  # Albumentations pipeline (dust, glare, occlusion)
+│   ├── dataloader.py                     # Custom PyTorch Dataset for off-road masks
+│   └── losses.py                         # Focal Loss implementation with per-class alpha
+│
+├── models/                               # Trained Model Checkpoints
 │   ├── segformer_b0/
-│   │   ├── best_segformer.pth  # Best validation checkpoint
-│   │   └── last_segformer.pth  # Latest training checkpoint
-│   ├── optimized_segformer.onnx      # Full-precision ONNX export
-│   └── optimized_segformer_int8.onnx # INT8 quantized ONNX (4× smaller)
+│   │   ├── best_segformer.pth            # Best validation checkpoint (~14.9 MB)
+│   │   ├── optimized_model.onnx          # Pruned ONNX export
+│   │   └── optimized_model.onnx.data     # ONNX external weight data
+│   ├── optimized_segformer.onnx          # Full-precision ONNX graph
+│   ├── optimized_segformer.onnx.data     # ONNX external weight data
+│   └── optimized_segformer_int8.onnx     # INT8 quantized ONNX (~4.8 MB)
 │
-├── data/
-│   ├── active_learning_review/ # Auto-flagged high-entropy frames for human review
-│   ├── eval_visuals/           # Generated prediction overlay images
-│   ├── class_distribution.png  # EDA class pixel frequency chart
-│   ├── class_distribution.csv  # Raw class frequency data
-│   ├── confusion_matrix.png    # 10×10 per-class confusion matrix
-│   └── augmentation_sample.png # Visual proof of augmentation pipeline
+├── data/                                 # Generated Outputs & Review Queue
+│   ├── active_learning_review/           # Auto-flagged high-entropy frames for human review
+│   │   └── high_entropy_*.jpg            # Timestamped uncertain frames
+│   ├── eval_visuals/
+│   │   └── prediction_overlay.png        # Generated prediction overlay
+│   ├── class_distribution.png            # EDA class pixel frequency chart
+│   ├── class_distribution.csv            # Raw class frequency data
+│   ├── confusion_matrix.png              # 10×10 per-class confusion matrix
+│   └── augmentation_sample.png           # Visual proof of augmentation pipeline
 │
-├── Dataset/                    # Raw training images + segmentation masks
-├── notebooks/                  # Jupyter exploration notebooks
-├── test.py                     # One-command evaluation script (for judges)
-├── requirements.txt            # Python dependencies
-├── docker-compose.yml          # Multi-service container orchestration
-└── README.md                   # ← You are here
+├── Dataset/                              # Raw Training Data
+│   ├── Offroad_Segmentation_Training_Dataset/  # Train/val splits with Color_Images + Segmentation
+│   ├── Offroad_Segmentation_testImages/        # Hold-out test images
+│   └── Offroad_Segmentation_Scripts/           # Original dataset utility scripts
+│
+├── notebooks/                            # Jupyter exploration notebooks
+│
+├── test.py                               # One-command evaluation script (for judges)
+├── requirements.txt                      # Python dependencies
+├── docker-compose.yml                    # Multi-service container orchestration
+├── pyrightconfig.json                    # Python type checker config
+├── yolov8n.pt                            # YOLOv8 nano weights (~6.5 MB)
+├── LICENSE                               # MIT License
+├── WORKFLOW.md                           # Detailed 7-phase development workflow
+├── TODO.md                               # Project roadmap & completion tracking
+├── ProbsSol.md                           # Problem statement & strategy analysis
+├── .gitignore                            # Git ignore rules
+└── README.md                             # ← You are here
 ```
 
 ---
